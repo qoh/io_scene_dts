@@ -111,3 +111,6 @@ def unregister():
 
 if __name__ == "__main__":
     register()
+
+import os
+print(os.path.realpath(__file__))

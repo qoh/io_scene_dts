@@ -30,9 +30,34 @@ class DtsInputStream(object):
 
 		n_sequence = unpack("i", fd.read(4))[0]
 		self.sequences = [None] * n_sequence
-		assert n_sequence == 0
+		def readBitSet(fd):
+			dummy = unpack("i", fd.read(4))[0]
+			numWords = unpack("i", fd.read(4))[0]
+			return unpack(str(numWords) + "i", fd.read(4 * numWords))
 		for i in range(n_sequence):
-			pass # read sequences one day
+			nameIndex = unpack("i", fd.read(4))[0]
+			flags = unpack("I", fd.read(4))[0]
+			numKeyframes = unpack("i", fd.read(4))[0]
+			duration = unpack("f", fd.read(4))[0]
+			priority = unpack("i", fd.read(4))[0]
+			firstGroundFrame = unpack("i", fd.read(4))[0]
+			numGroundFrames = unpack("i", fd.read(4))[0]
+			baseRotation = unpack("i", fd.read(4))[0]
+			baseTranslation = unpack("i", fd.read(4))[0]
+			baseScale = unpack("i", fd.read(4))[0]
+			baseObjectState = unpack("i", fd.read(4))[0]
+			baseDecalState = unpack("i", fd.read(4))[0]
+			firstTrigger = unpack("i", fd.read(4))[0]
+			numTriggers = unpack("i", fd.read(4))[0]
+			toolBegin = unpack("f", fd.read(4))[0]
+			rotationMatters = readBitSet(fd)
+			translationMatters = readBitSet(fd)
+			scaleMatters = readBitSet(fd)
+			decalMatters = readBitSet(fd)
+			iflMatters = readBitSet(fd)
+			visMatters = readBitSet(fd)
+			frameMatters = readBitSet(fd)
+			matFrameMatters = readBitSet(fd)
 
 		material_type = unpack("b", fd.read(1))[0]
 		assert material_type == 0x1
