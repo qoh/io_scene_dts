@@ -26,9 +26,6 @@ from bpy.props import (BoolProperty,
                        )
 from bpy_extras.io_utils import (ImportHelper,
                                  ExportHelper,
-                                 orientation_helper_factory,
-                                 path_reference_mode,
-                                 axis_conversion,
                                  )
 
 class ImportDTS(bpy.types.Operator, ImportHelper):
