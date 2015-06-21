@@ -2,14 +2,17 @@ import bpy
 
 import mathutils
 
-from .DtsInputShape import DtsInputShape, DtsInputStream
+from .DtsShape import DtsShape
 from .DtsTypes import *
 
 def load(operator, context, filepath,
-    include_armatures=True,
-    hide_default_player=False):
+         include_armatures=True,
+         hide_default_player=False):
+    shape = DtsShape()
+    
     with open(filepath, "rb") as fd:
-        shape = DtsInputShape(DtsInputStream(fd))
+        # shape = DtsInputShape(fd)
+        shape.load(fd)
 
     if include_armatures:
         # First load all the nodes into armatures

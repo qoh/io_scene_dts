@@ -16,6 +16,11 @@ class Node(object):
 		self.child = child
 		self.sibling = sibling
 
+	def write(self, stream):
+		stream.write32(
+			self.name, self.parent,
+			self.firstObject, self.child, self.sibling)
+
 	@classmethod
 	def read(cls, stream):
 		return cls(
@@ -31,6 +36,11 @@ class Object(object):
 		self.sibling = sibling
 		self.firstDecal = firstDecal
 
+	def write(self, stream):
+		stream.write32(
+			self.name, self.numMeshes, self.firstMesh,
+			self.node, self.sibling, self.firstDecal)
+
 	@classmethod
 	def read(cls, stream):
 		return cls(
@@ -44,6 +54,11 @@ class IflMaterial(object):
 		self.firstFrame = firstFrame
 		self.time = time
 		self.numFrames = numFrames
+
+	def write(self, stream):
+		self.write32(
+			self.name, self.slot, self.firstFrame,
+			self.time, self.numFrames)
 
 	@classmethod
 	def read(cls, stream):
@@ -66,6 +81,9 @@ class ObjectState(object):
 		self.frame = frame
 		self.matFrame = matFrame
 
+	def write(self, stream):
+		stream.write32(self.vis, self.frame, self.matFrame)
+
 	@classmethod
 	def read(cls, stream):
 		return cls(stream.read32(), stream.read32(), stream.read32())
@@ -74,6 +92,10 @@ class Trigger(object):
 	def __init__(self, state, pos):
 		self.state = state
 		self.pos = pos
+
+	def write(self, stream):
+		stream.write32(self.state)
+		stream.write_float(self.pos)
 
 	@classmethod
 	def read(cls, stream):
@@ -88,6 +110,11 @@ class DetailLevel(object):
 		self.avgError = avgError
 		self.maxError = maxError
 		self.polyCount = polyCount
+
+	def write(self, stream):
+		stream.write32(self.name, self.subshape, self.objectDetail)
+		stream.write_float(self.size, self.avgError, self.maxError)
+		stream.write32(self.polyCount)
 
 	@classmethod
 	def read(cls, stream):
@@ -110,6 +137,10 @@ class Primitive(object):
 		self.numElements = numElements
 		self.type = type
 
+	def write(self, stream):
+		stream.write16(self.firstElement, self.numElements)
+		stream.write32(self.type)
+
 	@classmethod
 	def read(cls, stream):
 		return cls(stream.read16(), stream.read16(), stream.read32())
@@ -122,7 +153,7 @@ class MeshType(Enum):
 	Null = 4
 
 class Mesh(object):
-	def __init__(self, type=MeshType.Null):
+	def __init__(self, type=MeshType.Standard):
 		self.bounds = Box(Point(0, 0, 0), Point(0, 0, 0))
 		self.center = Point(0, 0, 0)
 		self.radius = 0
@@ -132,6 +163,53 @@ class Mesh(object):
 		self.parent = -1
 		self.flags = 0
 		self.type = type
+		self.verts = []
+		self.tverts = []
+		self.normals = []
+		self.enormals = []
+		self.primitives = []
+		self.indices = []
+		self.mindices = []
+
+	def write(self, stream):
+		stream.write32(self.type.value)
+
+		if self.type is MeshType.Null:
+			return
+
+		stream.guard()
+		stream.write32(self.numFrames, self.matFrames, self.parent)
+		stream.write_box(self.bounds)
+		stream.write_point(self.center)
+		strema.write_float(self.radius)
+
+		# Geometry data
+		stream.write32(len(self.verts))
+		for vert in self.verts:
+			stream.write_point(vert)
+		stream.write32(len(self.tverts))
+		for tvert in self.tverts:
+			stream.write_point2d(tvert)
+
+		assert len(self.normals) == len(self.verts)
+		assert len(self.enormals) == len(self.verts)
+		for normal in self.normals:
+			stream.write_point(vert)
+		for enormal in self.enormals:
+			stream.write8(enormal)
+
+		# Primitives and other stuff
+		stream.write32(len(self.primitives))
+		for prim in self.primitives:
+			prim.write(stream)
+
+		#if stream.dtsVersion >= 25:
+		stream.write32(len(self.indices))
+		stream.write16(*self.indices)
+		stream.write32(len(self.mindices))
+		stream.write16(*self.mindices)
+		stream.write32(self.vertsPerFrame, self.flags)
+		stream.guard()
 
 	@classmethod
 	def read(cls, stream):

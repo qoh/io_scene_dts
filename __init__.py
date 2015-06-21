@@ -82,32 +82,26 @@ class ExportDTS(bpy.types.Operator, ExportHelper):
 
     def execute(self, context):
         from . import export_dts
-
-        from mathutils import Matrix
         keywords = self.as_keywords(ignore=("check_existing", "filter_glob"))
         return export_dts.save(self, context, **keywords)
-
 
 def menu_func_import(self, context):
     self.layout.operator(ImportDTS.bl_idname, text="Torque (.dts)")
 
-
 def menu_func_export(self, context):
     self.layout.operator(ExportDTS.bl_idname, text="Torque (.dts)")
-
 
 def register():
     bpy.utils.register_module(__name__)
 
     bpy.types.INFO_MT_file_import.append(menu_func_import)
-    # bpy.types.INFO_MT_file_export.append(menu_func_export)
-
+    bpy.types.INFO_MT_file_export.append(menu_func_export)
 
 def unregister():
     bpy.utils.unregister_module(__name__)
 
     bpy.types.INFO_MT_file_import.remove(menu_func_import)
-    # bpy.types.INFO_MT_file_export.remove(menu_func_export)
+    bpy.types.INFO_MT_file_export.remove(menu_func_export)
 
 if __name__ == "__main__":
     register()

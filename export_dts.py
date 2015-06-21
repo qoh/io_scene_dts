@@ -727,11 +727,6 @@ def _write(context, filepath,
 #   Window.WaitCursor(0)
 
 
-"""
-Currently the exporter lacks these features:
-* multiple scene export (only active scene is written)
-* particles
-"""
 
 
 def save(operator, context, filepath="",
@@ -777,3 +772,21 @@ def save(operator, context, filepath="",
            )
 
     return {'FINISHED'}
+
+from .DtsShape import DtsShape
+
+def save(operator, context, filepath,
+         use_selection=True):
+    scene = context.scene
+
+    if use_selection:
+        objects = context.selected_objects
+    else:
+        objects = scene.objects
+
+    shape = DtsShape()
+
+    with open(filepath, "wb") as fd:
+        shape.save(fd)
+
+    return {"FINISHED"}
