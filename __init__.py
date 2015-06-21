@@ -78,6 +78,12 @@ class ExportDTS(bpy.types.Operator, ExportHelper):
             default=False,
             )
 
+    blank_material = BoolProperty(
+            name="Blank Material",
+            description="Add a blank material to meshes with none assigned",
+            default=True,
+            )
+
     check_extension = True
 
     def execute(self, context):
