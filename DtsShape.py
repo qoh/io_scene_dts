@@ -60,16 +60,20 @@ class DtsOutputStream(object):
 		self.buffer32.extend(values)
 
 	def write16(self, *values):
+		for value in values:
+			assert type(value) == int, "type is {}, must be {}".format(type(value), int)
 		self.buffer16.extend(values)
 
 	def write8(self, *values):
+		for value in values:
+			assert type(value) == int, "type is {}, must be {}".format(type(value), int)
 		self.buffer8.extend(values)
 
 	def write_float(self, *values):
 		self.write32(*map(lambda f: unpack("i", pack("f", f))[0], values))
 
 	def write_string(self, string):
-		self.write8(string.encode("ascii"))
+		self.write8(*string.encode("ascii"))
 		self.write8(0)
 
 	def write_point(self, point):
@@ -198,6 +202,16 @@ class DtsShape(object):
 		self.radius_tube = 0.0
 		self.center = Point(0.0, 0.0, 0.0)
 		self.bounds = Box(Point(0.0, 0.0, 0.0), Point(0.0, 0.0, 0.0))
+
+	def name(self, string):
+		index = self._names_lookup.get(string.lower())
+
+		if index == None:
+			index = len(self.names)
+			self.names.append(string)
+			self._names_lookup[string.lower()] = index
+
+		return index
 
 	def save(self, fd, dtsVersion=24):
 		stream = DtsOutputStream(dtsVersion)
@@ -533,7 +547,7 @@ class DtsShape(object):
 			dummy = unpack("i", fd.read(4))[0]
 			numWords = unpack("i", fd.read(4))[0]
 			return unpack(str(numWords) + "i", fd.read(4 * numWords))
-		
+
 		for i in range(n_sequence):
 			nameIndex = unpack("i", fd.read(4))[0]
 			flags = unpack("I", fd.read(4))[0]

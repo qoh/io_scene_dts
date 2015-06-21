@@ -1,15 +1,64 @@
 from collections import namedtuple
 from struct import pack, unpack
 from enum import Enum
+import math
 
 Point3D = namedtuple("Point3D", "x y z")
+def __str__(self):
+	x = math.floor(self.x * 10000 + 0.5) / 10000
+	y = math.floor(self.y * 10000 + 0.5) / 10000
+	z = math.floor(self.z * 10000 + 0.5) / 10000
+	return "({}, {}, {})".format(x, y, z)
+Point3D.__str__ = __str__
+Point3D.__repr__ = __str__
+
 Point2D = namedtuple("Point2D", "x y")
+def __str__(self):
+	x = math.floor(self.x * 10000 + 0.5) / 10000
+	y = math.floor(self.y * 10000 + 0.5) / 10000
+	return "({}, {})".format(x, y)
+Point2D.__str__ = __str__
+Point2D.__repr__ = __str__
+
+# class Point3D(tuple):
+# 	@property
+# 	def x(self):
+# 		return self[0]
+
+# 	@property
+# 	def y(self):
+# 		return self[1]
+
+# 	@property
+# 	def z(self):
+# 		return self[2]
+	
+# 	def __str__(self):
+# 		x = math.floor(self.x / 10000 + 0.5) * 10000
+# 		y = math.floor(self.y / 10000 + 0.5) * 10000
+# 		z = math.floor(self.z / 10000 + 0.5) * 10000
+# 		return "({}, {}, {})".format(x, y, z)
+
+# class Point2D(tuple):
+# 	@property
+# 	def x(self):
+# 		return self[0]
+
+# 	@property
+# 	def y(self):
+# 		return self[1]
+
+# 	def __str__(self):
+# 		x = math.floor(self.x / 10000 + 0.5) * 10000
+# 		y = math.floor(self.y / 10000 + 0.5) * 10000
+# 		return "({}, {}, {})".format(x, y)
+
 Point = Point3D
 Box = namedtuple("Box", "min max")
 Quaternion = namedtuple("Quaternion", "x y z w")
 
 class Node(object):
-	def __init__(self, name, parent, firstObject=-1, child=-1, sibling=-1):
+	def __init__(self, name, parent=-1, firstObject=-1, child=-1, sibling=-1):
 		self.name = name
 		self.parent = parent
 		self.firstObject = firstObject
@@ -102,7 +151,7 @@ class Trigger(object):
 		return cls(stream.read32(), stream.read_float())
 
 class DetailLevel(object):
-	def __init__(self, name, subshape, objectDetail, size, avgError, maxError, polyCount):
+	def __init__(self, name, subshape, objectDetail, size, avgError=-1.0, maxError=-1.0, polyCount=0):
 		self.name = name
 		self.subshape = subshape
 		self.objectDetail = objectDetail
@@ -159,7 +208,7 @@ class Mesh(object):
 		self.radius = 0
 		self.numFrames = 1
 		self.matFrames = 1
-		self.vertsPerFrame = 0
+		self.vertsPerFrame = 1
 		self.parent = -1
 		self.flags = 0
 		self.type = type
@@ -181,7 +230,7 @@ class Mesh(object):
 		stream.write32(self.numFrames, self.matFrames, self.parent)
 		stream.write_box(self.bounds)
 		stream.write_point(self.center)
-		strema.write_float(self.radius)
+		stream.write_float(self.radius)
 
 		# Geometry data
 		stream.write32(len(self.verts))
@@ -194,7 +243,7 @@ class Mesh(object):
 		assert len(self.normals) == len(self.verts)
 		assert len(self.enormals) == len(self.verts)
 		for normal in self.normals:
-			stream.write_point(vert)
+			stream.write_point(normal)
 		for enormal in self.enormals:
 			stream.write8(enormal)
 
@@ -250,6 +299,22 @@ class Mesh(object):
 		return mesh
 
 class Material(object):
+	SWrap            = 0x00000001
+	TWrap            = 0x00000002
+	Translucent      = 0x00000004
+	Additive         = 0x00000008
+	Subtractive      = 0x00000010
+	SelfIlluminating = 0x00000020
+	NeverEnvMap      = 0x00000040
+	NoMipMap         = 0x00000080
+	MipMapZeroBorder = 0x00000100
+	IFLMaterial      = 0x08000000
+	IFLFrame         = 0x10000000
+	DetailMap        = 0x20000000
+	BumpMap          = 0x40000000
+	ReflectanceMap   = 0x80000000
+	AuxiliaryMask    = 0xE0000000
+
 	def __init__(self, name="", flags=0,
 		reflectanceMap=-1, bumpMap=-1, detailMap=-1,
 		detailScale=1.0, reflectance=0.0):

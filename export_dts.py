@@ -774,6 +774,7 @@ def save(operator, context, filepath="",
     return {'FINISHED'}
 
 from .DtsShape import DtsShape
+from .DtsTypes import *
 
 def save(operator, context, filepath,
          use_selection=True):
@@ -785,6 +786,102 @@ def save(operator, context, filepath,
         objects = scene.objects
 
     shape = DtsShape()
+    shape.nodes.append(Node(shape.name("Exp-Catch-Root")))
+    shape.default_translations.append(Point(0,0,0))
+    shape.default_rotations.append(Quaternion(0,0,0,1))
+
+    # Okay, so let's try to make a cube?
+    # First of all we need a Mesh for that
+    mesho = Mesh()
+    meshi = len(shape.meshes)
+    shape.meshes.append(mesho)
+    # # Cubes have 8 vertices
+    # mesho.verts = [
+    #     Point(-1,-1, 1), Point( 1,-1, 1), Point(-1, 1, 1), Point( 1, 1, 1),
+    #     Point(-1,-1,-1), Point( 1,-1,-1), Point(-1, 1,-1), Point( 1, 1,-1),
+    # ]
+    # # Oh right, need normals too.. this is gonna suck
+    # from math import sqrt
+    # nl = sqrt(3)
+    # mesho.normals = [
+    #     Point(-nl,-nl, nl), Point( nl,-nl, nl), Point(-nl, nl, nl), Point( nl, nl, nl),
+    #     Point(-nl,-nl,-nl), Point( nl,-nl,-nl), Point(-nl, nl,-nl), Point( nl, nl,-nl),
+    # ]
+    # # Wtf are enormals!?
+    # mesho.enormals = [0] * 8
+    # # Let's represent each of the 6 sides as its own primitive, as a triangle strip. Seems simple.
+    # # These suck
+    # mesho.indices = [ # Inefficient amount of indices, need some sort of bisecting/triangle stripper
+    #     0,1,2,3, # top
+    #     7,6,5,4, # bottom
+    #     1,3,7,5, # +X
+    #     0,2,6,4, # -X
+    #     2,3,6,7, # +Y
+    #     0,1,4,5, #-Y
+    # ]
+    # mesho.primitives = [ # NORMALS HOW EVEN FIX YOU
+    #     Primitive( 0, 4, Primitive.Strip), # top
+    #     Primitive( 4, 4, Primitive.Strip), # bottom
+    #     Primitive( 8, 4, Primitive.Strip), # +X
+    #     Primitive(12, 4, Primitive.Strip), # -X
+    #     Primitive(16, 4, Primitive.Strip), # +Y
+    #     Primitive(20, 4, Primitive.Strip), # -Y
+    # ]
+    # Try to do it again! This time with triangle lists!
+    # Maybe we can do it with 8 vertices again, but we really need 24 here because of the normals.
+    mesho.verts = [
+        #   bottom left     bottom right         top left         top right
+        Point(-1,-1, 1), Point( 1,-1, 1), Point(-1, 1, 1), Point( 1, 1, 1), # upper
+        Point(-1,-1,-1), Point( 1,-1,-1), Point(-1, 1,-1), Point( 1, 1,-1), # lower
+    ]
+    mesho.tverts = [Point2D(0, 0)] * 8
+    from math import sqrt
+    nl = sqrt(3)
+    # mesho.normals = [
+    #     Point(-nl,-nl, nl), Point( nl,-nl, nl), Point(-nl, nl, nl), Point( nl, nl, nl),
+    #     Point(-nl,-nl,-nl), Point( nl,-nl,-nl), Point(-nl, nl,-nl), Point( nl, nl,-nl),
+    # ]
+    mesho.normals = [Point(0, 0, 1)] * 8
+    mesho.enormals = [0] * 8
+    # Ok so that's settled, let's try to set up the faces for this I guess
+    mesho.indices = [
+        2,1,0,3,1,2, # top
+        # lol
+    ]
+    mesho.primitives = [
+        Primitive(0, len(mesho.indices), Primitive.Triangles | Primitive.Indexed)
+    ]
+    print("our normals are " + str(mesho.normals))
+    print(mesho.primitives[0].type)
+
+    mesho.bounds = Box(Point(-1,-1,-1), Point(1,1,1))
+    mesho.radius = 1.732050895690918
+    mesho.vertsPerFrame = 8
+    # We need a lot more than that for a mesh but maybe it works anyway.
+    # Let's make a Node for a future Object.
+    nodeo = Node(shape.name("Cube"))
+    nodei = len(shape.nodes)
+    shape.nodes.append(nodeo)
+    # Add this stuff for the node..
+    shape.default_translations.append(Point(0,0,0))
+    shape.default_rotations.append(Quaternion(0,0,0,1))
+    # Let's make an object containing the mesh under that node.
+    objecto = Object(shape.name("Cube"), numMeshes=1, firstMesh=meshi, node=nodei)
+    objecti = len(shape.objects)
+    shape.objects.append(objecto)
+
+    # Do I need this?
+    shape.objectstates.append(ObjectState(1065353216, 0, 0))
+
+    # Does that actually work??
+    shape.materials.append(Material(name="Material", flags=Material.SWrap | Material.TWrap | Material.NeverEnvMap, reflectanceMap=0))
+    shape.subshapes.append(Subshape(firstNode=0, firstObject=objecti, firstDecal=0, numNodes=2, numObjects=1, numDecals=0))
+    shape.detail_levels.append(DetailLevel(name=shape.name("Detail-1"), subshape=0, objectDetail=0, size=1.0, polyCount=8))
+
+    shape.smallest_size = 1.401298464324817e-45
+    shape.bounds = Box(Point(-1,-1,-1), Point(1,1,1))
+    shape.radius = 1.732050895690918
+    shape.radius_tube = 1.4142136573791504
 
     with open(filepath, "wb") as fd:
         shape.save(fd)
