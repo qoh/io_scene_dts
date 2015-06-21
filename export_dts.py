@@ -5,14 +5,7 @@ import bpy
 import mathutils
 import bpy_extras.io_utils
 
-
-def name_compat(name):
-    if name is None:
-        return 'None'
-    else:
-        return name.replace(' ', '_')
-
-
+"""
 def mesh_triangulate(me):
     import bmesh
     bm = bmesh.new()
@@ -20,205 +13,6 @@ def mesh_triangulate(me):
     bmesh.ops.triangulate(bm, faces=bm.faces)
     bm.to_mesh(me)
     bm.free()
-
-
-def write_mtl(scene, filepath, path_mode, copy_set, mtl_dict):
-    from mathutils import Color
-
-    world = scene.world
-    if world:
-        world_amb = world.ambient_color
-    else:
-        world_amb = Color((0.0, 0.0, 0.0))
-
-    source_dir = os.path.dirname(bpy.data.filepath)
-    dest_dir = os.path.dirname(filepath)
-
-    file = open(filepath, "w", encoding="utf8", newline="\n")
-    fw = file.write
-
-    fw('# Blender MTL File: %r\n' % (os.path.basename(bpy.data.filepath) or "None"))
-    fw('# Material Count: %i\n' % len(mtl_dict))
-
-    mtl_dict_values = list(mtl_dict.values())
-    mtl_dict_values.sort(key=lambda m: m[0])
-
-    # Write material/image combinations we have used.
-    # Using mtl_dict.values() directly gives un-predictable order.
-    for mtl_mat_name, mat, face_img in mtl_dict_values:
-
-        # Get the Blender data for the material and the image.
-        # Having an image named None will make a bug, dont do it :)
-
-        fw('\nnewmtl %s\n' % mtl_mat_name)  # Define a new material: matname_imgname
-
-        if mat:
-            # convert from blenders spec to 0 - 1000 range.
-            if mat.specular_shader == 'WARDISO':
-                tspec = (0.4 - mat.specular_slope) / 0.0004
-            else:
-                tspec = (mat.specular_hardness - 1) * 1.9607843137254901
-            fw('Ns %.6f\n' % tspec)
-            del tspec
-
-            fw('Ka %.6f %.6f %.6f\n' % (mat.ambient * world_amb)[:])  # Ambient, uses mirror color,
-            fw('Kd %.6f %.6f %.6f\n' % (mat.diffuse_intensity * mat.diffuse_color)[:])  # Diffuse
-            fw('Ks %.6f %.6f %.6f\n' % (mat.specular_intensity * mat.specular_color)[:])  # Specular
-            if hasattr(mat, "raytrace_transparency") and hasattr(mat.raytrace_transparency, "ior"):
-                fw('Ni %.6f\n' % mat.raytrace_transparency.ior)  # Refraction index
-            else:
-                fw('Ni %.6f\n' % 1.0)
-            fw('d %.6f\n' % mat.alpha)  # Alpha (obj uses 'd' for dissolve)
-
-            # 0 to disable lighting, 1 for ambient & diffuse only (specular color set to black), 2 for full lighting.
-            if mat.use_shadeless:
-                fw('illum 0\n')  # ignore lighting
-            elif mat.specular_intensity == 0:
-                fw('illum 1\n')  # no specular.
-            else:
-                fw('illum 2\n')  # light normaly
-
-        else:
-            # Write a dummy material here?
-            fw('Ns 0\n')
-            fw('Ka %.6f %.6f %.6f\n' % world_amb[:])  # Ambient, uses mirror color,
-            fw('Kd 0.8 0.8 0.8\n')
-            fw('Ks 0.8 0.8 0.8\n')
-            fw('d 1\n')  # No alpha
-            fw('illum 2\n')  # light normaly
-
-        # Write images!
-        if face_img:  # We have an image on the face!
-            filepath = face_img.filepath
-            if filepath:  # may be '' for generated images
-                # write relative image path
-                filepath = bpy_extras.io_utils.path_reference(filepath, source_dir, dest_dir,
-                                                              path_mode, "", copy_set, face_img.library)
-                fw('map_Kd %s\n' % filepath)  # Diffuse mapping image
-                del filepath
-            else:
-                # so we write the materials image.
-                face_img = None
-
-        if mat:  # No face image. if we havea material search for MTex image.
-            image_map = {}
-            # backwards so topmost are highest priority
-            for mtex in reversed(mat.texture_slots):
-                if mtex and mtex.texture and mtex.texture.type == 'IMAGE':
-                    image = mtex.texture.image
-                    if image:
-                        # texface overrides others
-                        if (mtex.use_map_color_diffuse and (face_img is None) and
-                            (mtex.use_map_warp is False) and (mtex.texture_coords != 'REFLECTION')):
-                            image_map["map_Kd"] = image
-                        if mtex.use_map_ambient:
-                            image_map["map_Ka"] = image
-                        # this is the Spec intensity channel but Ks stands for specular Color
-                        '''
-                        if mtex.use_map_specular:
-                            image_map["map_Ks"] = image
-                        '''
-                        if mtex.use_map_color_spec:  # specular color
-                            image_map["map_Ks"] = image
-                        if mtex.use_map_hardness:  # specular hardness/glossiness
-                            image_map["map_Ns"] = image
-                        if mtex.use_map_alpha:
-                            image_map["map_d"] = image
-                        if mtex.use_map_translucency:
-                            image_map["map_Tr"] = image
-                        if mtex.use_map_normal:
-                            image_map["map_Bump"] = image
-                        if mtex.use_map_displacement:
-                            image_map["disp"] = image
-                        if mtex.use_map_color_diffuse and (mtex.texture_coords == 'REFLECTION'):
-                            image_map["refl"] = image
-                        if mtex.use_map_emit:
-                            image_map["map_Ke"] = image
-
-            for key, image in sorted(image_map.items()):
-                filepath = bpy_extras.io_utils.path_reference(image.filepath, source_dir, dest_dir,
-                                                              path_mode, "", copy_set, image.library)
-                fw('%s %s\n' % (key, repr(filepath)[1:-1]))
-
-    file.close()
-
-
-def test_nurbs_compat(ob):
-    if ob.type != 'CURVE':
-        return False
-
-    for nu in ob.data.splines:
-        if nu.point_count_v == 1 and nu.type != 'BEZIER':  # not a surface and not bezier
-            return True
-
-    return False
-
-
-def write_nurb(fw, ob, ob_mat):
-    tot_verts = 0
-    cu = ob.data
-
-    # use negative indices
-    for nu in cu.splines:
-        if nu.type == 'POLY':
-            DEG_ORDER_U = 1
-        else:
-            DEG_ORDER_U = nu.order_u - 1  # odd but tested to be correct
-
-        if nu.type == 'BEZIER':
-            print("\tWarning, bezier curve:", ob.name, "only poly and nurbs curves supported")
-            continue
-
-        if nu.point_count_v > 1:
-            print("\tWarning, surface:", ob.name, "only poly and nurbs curves supported")
-            continue
-
-        if len(nu.points) <= DEG_ORDER_U:
-            print("\tWarning, order_u is lower then vert count, skipping:", ob.name)
-            continue
-
-        pt_num = 0
-        do_closed = nu.use_cyclic_u
-        do_endpoints = (do_closed == 0) and nu.use_endpoint_u
-
-        for pt in nu.points:
-            fw('v %.6f %.6f %.6f\n' % (ob_mat * pt.co.to_3d())[:])
-            pt_num += 1
-        tot_verts += pt_num
-
-        fw('g %s\n' % (name_compat(ob.name)))  # name_compat(ob.getData(1)) could use the data name too
-        fw('cstype bspline\n')  # not ideal, hard coded
-        fw('deg %d\n' % DEG_ORDER_U)  # not used for curves but most files have it still
-
-        curve_ls = [-(i + 1) for i in range(pt_num)]
-
-        # 'curv' keyword
-        if do_closed:
-            if DEG_ORDER_U == 1:
-                pt_num += 1
-                curve_ls.append(-1)
-            else:
-                pt_num += DEG_ORDER_U
-                curve_ls = curve_ls + curve_ls[0:DEG_ORDER_U]
-
-        fw('curv 0.0 1.0 %s\n' % (" ".join([str(i) for i in curve_ls])))  # Blender has no U and V values for the curve
-
-        # 'parm' keyword
-        tot_parm = (DEG_ORDER_U + 1) + pt_num
-        tot_parm_div = float(tot_parm - 1)
-        parm_ls = [(i / tot_parm_div) for i in range(tot_parm)]
-
-        if do_endpoints:  # end points, force param
-            for i in range(DEG_ORDER_U + 1):
-                parm_ls[i] = 0.0
-                parm_ls[-(1 + i)] = 1.0
-
-        fw("parm u %s\n" % " ".join(["%.6f" % i for i in parm_ls]))
-
-        fw('end\n')
-
-    return tot_verts
-
 
 def write_file(filepath, objects, scene,
                EXPORT_TRI=False,
@@ -238,12 +32,12 @@ def write_file(filepath, objects, scene,
                EXPORT_GLOBAL_MATRIX=None,
                EXPORT_PATH_MODE='AUTO',
                ):
-    """
-    Basic write function. The context and options must be already set
-    This can be accessed externaly
-    eg.
-    write( 'c:\\test\\foobar.obj', Blender.Object.GetSelected() ) # Using default options.
-    """
+    ""
+    #Basic write function. The context and options must be already set
+    #This can be accessed externaly
+    #eg.
+    #write( 'c:\\test\\foobar.obj', Blender.Object.GetSelected() ) # Using default options.
+    ""
 
     if EXPORT_GLOBAL_MATRIX is None:
         EXPORT_GLOBAL_MATRIX = mathutils.Matrix()
@@ -255,14 +49,14 @@ def write_file(filepath, objects, scene,
         return round(v[0], 4), round(v[1], 4)
 
     def findVertexGroupName(face, vWeightMap):
-        """
+        ""
         Searches the vertexDict to see what groups is assigned to a given face.
         We use a frequency system in order to sort out the name because a given vetex can
         belong to two or more groups at the same time. To find the right name for the face
         we list all the possible vertex group names with their frequency and then sort by
         frequency in descend order. The top element is the one shared by the highest number
         of vertices is the face's group
-        """
+        ""
         weightDict = {}
         for vert_index in face.vertices:
             vWeights = vWeightMap[vert_index]
@@ -647,7 +441,6 @@ def write_file(filepath, objects, scene,
 
     print("OBJ Export time: %.2f" % (time.time() - time1))
 
-
 def _write(context, filepath,
            EXPORT_TRI,  # ok
            EXPORT_EDGES,
@@ -721,60 +514,13 @@ def _write(context, filepath,
                    )
 
     scene.frame_set(orig_frame, 0.0)
-
-    # Restore old active scene.
-#   orig_scene.makeCurrent()
-#   Window.WaitCursor(0)
-
-
-
-
-def save(operator, context, filepath="",
-         use_triangles=False,
-         use_edges=True,
-         use_normals=False,
-         use_smooth_groups=False,
-         use_smooth_groups_bitflags=False,
-         use_uvs=True,
-         use_materials=True,
-         use_mesh_modifiers=True,
-         use_blen_objects=True,
-         group_by_object=False,
-         group_by_material=False,
-         keep_vertex_order=False,
-         use_vertex_groups=False,
-         use_nurbs=True,
-         use_selection=True,
-         use_animation=False,
-         global_matrix=None,
-         path_mode='AUTO'
-         ):
-
-    _write(context, filepath,
-           EXPORT_TRI=use_triangles,
-           EXPORT_EDGES=use_edges,
-           EXPORT_SMOOTH_GROUPS=use_smooth_groups,
-           EXPORT_SMOOTH_GROUPS_BITFLAGS=use_smooth_groups_bitflags,
-           EXPORT_NORMALS=use_normals,
-           EXPORT_UV=use_uvs,
-           EXPORT_MTL=use_materials,
-           EXPORT_APPLY_MODIFIERS=use_mesh_modifiers,
-           EXPORT_BLEN_OBS=use_blen_objects,
-           EXPORT_GROUP_BY_OB=group_by_object,
-           EXPORT_GROUP_BY_MAT=group_by_material,
-           EXPORT_KEEP_VERT_ORDER=keep_vertex_order,
-           EXPORT_POLYGROUPS=use_vertex_groups,
-           EXPORT_CURVE_AS_NURBS=use_nurbs,
-           EXPORT_SEL_ONLY=use_selection,
-           EXPORT_ANIMATION=use_animation,
-           EXPORT_GLOBAL_MATRIX=global_matrix,
-           EXPORT_PATH_MODE=path_mode,
-           )
-
-    return {'FINISHED'}
+"""
 
 from .DtsShape import DtsShape
 from .DtsTypes import *
+
+import math
+import bmesh
 
 def save(operator, context, filepath,
          use_selection=True):
@@ -790,98 +536,133 @@ def save(operator, context, filepath,
     shape.default_translations.append(Point(0,0,0))
     shape.default_rotations.append(Quaternion(0,0,0,1))
 
-    # Okay, so let's try to make a cube?
-    # First of all we need a Mesh for that
-    mesho = Mesh()
-    meshi = len(shape.meshes)
-    shape.meshes.append(mesho)
-    # # Cubes have 8 vertices
-    # mesho.verts = [
-    #     Point(-1,-1, 1), Point( 1,-1, 1), Point(-1, 1, 1), Point( 1, 1, 1),
-    #     Point(-1,-1,-1), Point( 1,-1,-1), Point(-1, 1,-1), Point( 1, 1,-1),
-    # ]
-    # # Oh right, need normals too.. this is gonna suck
-    # from math import sqrt
-    # nl = sqrt(3)
-    # mesho.normals = [
-    #     Point(-nl,-nl, nl), Point( nl,-nl, nl), Point(-nl, nl, nl), Point( nl, nl, nl),
-    #     Point(-nl,-nl,-nl), Point( nl,-nl,-nl), Point(-nl, nl,-nl), Point( nl, nl,-nl),
-    # ]
-    # # Wtf are enormals!?
-    # mesho.enormals = [0] * 8
-    # # Let's represent each of the 6 sides as its own primitive, as a triangle strip. Seems simple.
-    # # These suck
-    # mesho.indices = [ # Inefficient amount of indices, need some sort of bisecting/triangle stripper
-    #     0,1,2,3, # top
-    #     7,6,5,4, # bottom
-    #     1,3,7,5, # +X
-    #     0,2,6,4, # -X
-    #     2,3,6,7, # +Y
-    #     0,1,4,5, #-Y
-    # ]
-    # mesho.primitives = [ # NORMALS HOW EVEN FIX YOU
-    #     Primitive( 0, 4, Primitive.Strip), # top
-    #     Primitive( 4, 4, Primitive.Strip), # bottom
-    #     Primitive( 8, 4, Primitive.Strip), # +X
-    #     Primitive(12, 4, Primitive.Strip), # -X
-    #     Primitive(16, 4, Primitive.Strip), # +Y
-    #     Primitive(20, 4, Primitive.Strip), # -Y
-    # ]
-    # Try to do it again! This time with triangle lists!
-    # Maybe we can do it with 8 vertices again, but we really need 24 here because of the normals.
-    mesho.verts = [
-        #   bottom left     bottom right         top left         top right
-        Point(-1,-1, 1), Point( 1,-1, 1), Point(-1, 1, 1), Point( 1, 1, 1), # upper
-        Point(-1,-1,-1), Point( 1,-1,-1), Point(-1, 1,-1), Point( 1, 1,-1), # lower
-    ]
-    mesho.tverts = [Point2D(0, 0)] * 8
-    from math import sqrt
-    nl = sqrt(3)
-    # mesho.normals = [
-    #     Point(-nl,-nl, nl), Point( nl,-nl, nl), Point(-nl, nl, nl), Point( nl, nl, nl),
-    #     Point(-nl,-nl,-nl), Point( nl,-nl,-nl), Point(-nl, nl,-nl), Point( nl, nl,-nl),
-    # ]
-    mesho.normals = [Point(0, 0, 1)] * 8
-    mesho.enormals = [0] * 8
-    # Ok so that's settled, let's try to set up the faces for this I guess
-    mesho.indices = [
-        2,1,0,3,1,2, # top
-        # lol
-    ]
-    mesho.primitives = [
-        Primitive(0, len(mesho.indices), Primitive.Triangles | Primitive.Indexed)
-    ]
-    print("our normals are " + str(mesho.normals))
-    print(mesho.primitives[0].type)
+    poly_count = 0
+    smin = [0, 0, 0]
+    smax = [0, 0, 0]
 
-    mesho.bounds = Box(Point(-1,-1,-1), Point(1,1,1))
-    mesho.radius = 1.732050895690918
-    mesho.vertsPerFrame = 8
-    # We need a lot more than that for a mesh but maybe it works anyway.
-    # Let's make a Node for a future Object.
-    nodeo = Node(shape.name("Cube"))
-    nodei = len(shape.nodes)
-    shape.nodes.append(nodeo)
-    # Add this stuff for the node..
-    shape.default_translations.append(Point(0,0,0))
-    shape.default_rotations.append(Quaternion(0,0,0,1))
-    # Let's make an object containing the mesh under that node.
-    objecto = Object(shape.name("Cube"), numMeshes=1, firstMesh=meshi, node=nodei)
-    objecti = len(shape.objects)
-    shape.objects.append(objecto)
+    for bobj in objects:
+        if bobj.type != "MESH":
+            print("skipping " + bobj.name)
+            continue
 
-    # Do I need this?
-    shape.objectstates.append(ObjectState(1065353216, 0, 0))
+        mesh = bobj.to_mesh(scene, False, "PREVIEW")
+        bm = bmesh.new()
+        bm.from_mesh(mesh)
+        bmesh.ops.triangulate(bm, faces=bm.faces)
+        bm.to_mesh(mesh)
+        bm.free()
 
-    # Does that actually work??
+        # For now, just output a Mesh, Object and Node for each Blender object
+        mesho = Mesh()
+        meshi = len(shape.meshes)
+        shape.meshes.append(mesho)
+
+        mmin = [0, 0, 0]
+        mmax = [0, 0, 0]
+
+        for vertex in mesh.vertices:
+            mmin[0] = min(mmin[0], vertex.co.x)
+            mmin[1] = min(mmin[1], vertex.co.y)
+            mmin[2] = min(mmin[2], vertex.co.z)
+            mmax[0] = min(mmax[0], vertex.co.x)
+            mmax[1] = min(mmax[1], vertex.co.y)
+            mmax[2] = min(mmax[2], vertex.co.z)
+            smin[0] = min(smin[0], vertex.co.x)
+            smin[1] = min(smin[1], vertex.co.y)
+            smin[2] = min(smin[2], vertex.co.z)
+            smax[0] = min(smax[0], vertex.co.x)
+            smax[1] = min(smax[1], vertex.co.y)
+            smax[2] = min(smax[2], vertex.co.z)
+
+            radius = math.sqrt(vertex.co.x**2 + vertex.co.y**2 + vertex.co.z**2)
+            radius_tube = math.sqrt(vertex.co.x**2 + vertex.co.y**2)
+            mesho.radius = max(mesho.radius, radius)
+            shape.radius = max(shape.radius, radius)
+            shape.radius_tube = max(shape.radius_tube, radius_tube)
+
+            mesho.verts.append(Point(*vertex.co))
+            # mesho.normals.append(Point(*vertex.normal))
+            mesho.normals.append(Point(-vertex.normal.x, -vertex.normal.y, -vertex.normal.z))
+            mesho.enormals.append(0)
+            mesho.tverts.append(Point2D(0, 0))
+
+        mesho.bounds = Box(Point(*mmin), Point(*mmax))
+
+        for polygon in mesh.polygons:
+            poly_count += 1
+            mesho.indices.append(polygon.vertices[2])
+            mesho.indices.append(polygon.vertices[1])
+            mesho.indices.append(polygon.vertices[0])
+            # mesho.indices.extend(polygon.vertices)
+
+        mesho.primitives.append(Primitive(0, len(mesho.indices), Primitive.Triangles | Primitive.Indexed))
+        mesho.vertsPerFrame = len(mesho.verts)
+
+        # Make a Node for the future Object
+        nodeo = Node(shape.name(bobj.name))
+        nodei = len(shape.nodes)
+        shape.nodes.append(nodeo)
+        shape.default_translations.append(Point(*bobj.location))
+        shape.default_rotations.append(Quaternion(*bobj.rotation_quaternion))
+        # ^ this needs to consider bobj.rotation_mode!
+
+        # Now put the Mesh in an Object
+        objecto = Object(shape.name(bobj.name), numMeshes=1, firstMesh=meshi, node=nodei)
+        objecti = len(shape.objects)
+        shape.objects.append(objecto)
+
     shape.materials.append(Material(name="Material", flags=Material.SWrap | Material.TWrap | Material.NeverEnvMap, reflectanceMap=0))
-    shape.subshapes.append(Subshape(firstNode=0, firstObject=objecti, firstDecal=0, numNodes=2, numObjects=1, numDecals=0))
-    shape.detail_levels.append(DetailLevel(name=shape.name("Detail-1"), subshape=0, objectDetail=0, size=1.0, polyCount=8))
+    shape.subshapes.append(Subshape(firstNode=0, firstObject=0, firstDecal=0, numNodes=len(shape.nodes), numObjects=len(shape.objects), numDecals=0))
+    shape.detail_levels.append(DetailLevel(name=shape.name("Detail-1"), subshape=0, objectDetail=0, size=1.0, polyCount=poly_count))
 
     shape.smallest_size = 1.401298464324817e-45
-    shape.bounds = Box(Point(-1,-1,-1), Point(1,1,1))
-    shape.radius = 1.732050895690918
-    shape.radius_tube = 1.4142136573791504
+    shape.bounds = Box(Point(*smin), Point(*smax))
+    # shape.radius = 1.732050895690918
+    # shape.radius_tube = 1.4142136573791504
+
+    # Okay, so let's try to make a cube?
+    # First of all we need a Mesh for that
+    # mesho = Mesh()
+    # meshi = len(shape.meshes)
+    # shape.meshes.append(mesho)
+
+    # # Try to do it again! This time with triangle lists!
+    # # Maybe we can do it with 8 vertices again, but we really need 24 here because of the normals.
+    # mesho.verts = [
+    #     #   bottom left     bottom right         top left         top right
+    #     Point(-1,-1, 1), Point( 1,-1, 1), Point(-1, 1, 1), Point( 1, 1, 1), # upper
+    #     Point(-1,-1,-1), Point( 1,-1,-1), Point(-1, 1,-1), Point( 1, 1,-1), # lower
+    # ]
+    # mesho.tverts = [Point2D(0, 0)] * 8
+    # mesho.normals = [Point(0, 0, 1)] * 8
+    # mesho.enormals = [0] * 8
+    # mesho.indices = [2,1,0,3,1,2]
+    # mesho.primitives = [Primitive(0, 6, Primitive.Triangles | Primitive.Indexed)]
+    # mesho.bounds = Box(Point(-1,-1,-1), Point(1,1,1))
+    # mesho.radius = 1.732050895690918
+    # mesho.vertsPerFrame = 8
+    
+    # # Let's make a Node for a future Object.
+    # nodeo = Node(shape.name("Cube"))
+    # nodei = len(shape.nodes)
+    # shape.nodes.append(nodeo)
+    # # Add this stuff for the node..
+    # shape.default_translations.append(Point(0,0,0))
+    # shape.default_rotations.append(Quaternion(0,0,0,1))
+    # # Let's make an object containing the mesh under that node.
+    # objecto = Object(shape.name("Cube"), numMeshes=1, firstMesh=meshi, node=nodei)
+    # objecti = len(shape.objects)
+    # shape.objects.append(objecto)
+
+    # Does that actually work??
+    # shape.materials.append(Material(name="Material", flags=Material.SWrap | Material.TWrap | Material.NeverEnvMap, reflectanceMap=0))
+    # shape.subshapes.append(Subshape(firstNode=0, firstObject=objecti, firstDecal=0, numNodes=2, numObjects=1, numDecals=0))
+    # shape.detail_levels.append(DetailLevel(name=shape.name("Detail-1"), subshape=0, objectDetail=0, size=1.0, polyCount=8))
+
+    # shape.smallest_size = 1.401298464324817e-45
+    # shape.bounds = Box(Point(-1,-1,-1), Point(1,1,1))
+    # shape.radius = 1.732050895690918
+    # shape.radius_tube = 1.4142136573791504
 
     with open(filepath, "wb") as fd:
         shape.save(fd)
