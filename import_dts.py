@@ -7,17 +7,8 @@ from .DtsTypes import *
 
 # TODO: Load from the detail level down, not by-object/node
 
-def load(operator, context, filepath,
-         include_armatures=True,
-         hide_default_player=False):
-    shape = DtsShape()
-
-    with open(filepath, "rb") as fd:
-        # shape = DtsInputShape(fd)
-        shape.load(fd)
-
-    # In the process.. print EVERYTHING to a file
-    with open(filepath + ".txt", "w") as fd:
+def write_debug_report(filepath, shape):
+    with open(filepath, "w") as fd:
         def p(line):
             fd.write(line + "\n")
         def gn(i):
@@ -181,12 +172,37 @@ def load(operator, context, filepath,
         for i, name in enumerate(shape.names):
             p("  " + str(i) + " = " + name)
 
+def load(operator, context, filepath,
+         lod_as_empty=True,
+         include_armatures=True,
+         hide_default_player=False,
+         debug_report=False):
+    shape = DtsShape()
+
+    with open(filepath, "rb") as fd:
+        shape.load(fd)
+
+    if debug_report:
+        write_debug_report(filepath + ".txt", shape)
+
+    node_lod = {}
+
+    if lod_as_empty:
+        for lod in shape.detail_levels:
+            print("creating lod " + shape.names[lod.name])
+            empty = bpy.data.objects.new(name=shape.names[lod.name], object_data=None)
+            context.scene.objects.link(empty)
+            sub = shape.subshapes[lod.subshape]
+
+            for i in range(sub.firstNode, sub.firstNode + sub.numNodes):
+                print("  associating node " + str(i) + " with it")
+                node_lod[i] = empty
+
     if include_armatures:
         # First load all the nodes into armatures
         nodes = [] # For accessing indices when parenting later
 
         for i, node in enumerate(shape.nodes):
-            # Create an armature and an object for it
             amt = bpy.data.armatures.new(shape.names[node.name])
             bnode = bpy.data.objects.new(name=shape.names[node.name], object_data=amt)
             bnode.location = mathutils.Vector(shape.default_translations[i])
@@ -200,23 +216,28 @@ def load(operator, context, filepath,
             ))
 
             context.scene.objects.link(bnode)
-            nodes.append((node, bnode)) # Store pair for later
+            nodes.append((node, bnode, i))
 
         # Now set all the parents appropriately
-        for node, bnode in nodes:
+        for node, bnode, nodei in nodes:
             if node.parent != -1:
                 bnode.parent = nodes[node.parent][1]
+            elif nodei in node_lod:
+                bnode.parent = node_lod[nodei]
     else:
         objects = {}
 
     # Then put objects in the armatures
     for obj in shape.objects:
-        if obj.numMeshes != 1: # TODO: Really need to support non-1:1 objects! A lot of models use it.
+        meshes = (shape.meshes[i] for i in range(obj.firstMesh, obj.firstMesh + obj.numMeshes))
+        meshes = list(filter(lambda m: m.type != MeshType.Null, meshes))
+
+        if len(meshes) != 1: # TODO...
             print("Skipping object {} with {} meshes (only 1 mesh per object is supported)".format(
                 shape.names[obj.name], obj.numMeshes))
             continue
 
-        mesh = shape.meshes[obj.firstMesh]
+        mesh = meshes[0]
 
         if mesh.type != MeshType.Standard: # TODO: Support other types too...
             #if mesh.type != MeshType.None: # No need to warn for this, it's intended..

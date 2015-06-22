@@ -40,6 +40,12 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
             options={'HIDDEN'},
             )
 
+    lod_as_empty = BoolProperty(
+        name="Include LODs",
+        description="Create parent empties for LODs in the shape",
+        default = True,
+        )
+
     include_armatures = BoolProperty(
         name="Armatures",
         description="Import the full node->object hierarchy",
@@ -49,6 +55,12 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
     hide_default_player = BoolProperty(
         name="Hide Blockhead Nodes",
         description="Set extra avatar nodes to hidden",
+        default=False,
+        )
+
+    debug_report = BoolProperty(
+        name="Write debug report",
+        description="Dump out all the information from the DTS to a file",
         default=False,
         )
 
