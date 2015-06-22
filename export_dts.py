@@ -6,7 +6,8 @@ from .DtsTypes import *
 
 def save(operator, context, filepath,
          use_selection=True,
-         blank_material=True):
+         blank_material=True,
+         force_flatshade=True):
     scene = context.scene
 
     if use_selection:
@@ -15,9 +16,6 @@ def save(operator, context, filepath,
         objects = scene.objects
 
     shape = DtsShape()
-    shape.nodes.append(Node(shape.name("Exp-Catch-Root")))
-    shape.default_translations.append(Point(0,0,0))
-    shape.default_rotations.append(Quaternion(0,0,0,1))
 
     poly_count = 0
     smin = [0, 0, 0]
@@ -31,12 +29,22 @@ def save(operator, context, filepath,
             print("skipping " + bobj.name)
             continue
 
-        mesh = bobj.to_mesh(scene, False, "PREVIEW")
+        if force_flatshade:
+            # Hack in flatshading
+            scene.objects.active = bobj
+            bpy.ops.object.modifier_add(type="EDGE_SPLIT")
+            bobj.modifiers[-1].split_angle = 0
+
+        mesh = bobj.to_mesh(scene, force_flatshade, "PREVIEW")
         bm = bmesh.new()
         bm.from_mesh(mesh)
         bmesh.ops.triangulate(bm, faces=bm.faces)
         bm.to_mesh(mesh)
         bm.free()
+
+        if force_flatshade:
+            # Clean up our hack
+            bpy.ops.object.modifier_remove(modifier=bobj.modifiers[-1].name)
 
         # For now, just output a Mesh, Object and Node for each Blender object
         mesho = Mesh()
@@ -67,8 +75,7 @@ def save(operator, context, filepath,
             shape.radius_tube = max(shape.radius_tube, radius_tube)
 
             mesho.verts.append(Point(*vertex.co))
-            # mesho.normals.append(Point(*vertex.normal))
-            mesho.normals.append(Point(-vertex.normal.x, -vertex.normal.y, -vertex.normal.z))
+            mesho.normals.append(Point(*vertex.normal))
             mesho.enormals.append(0)
             mesho.tverts.append(Point2D(0, 0))
 
@@ -79,7 +86,6 @@ def save(operator, context, filepath,
             mesho.indices.append(polygon.vertices[2])
             mesho.indices.append(polygon.vertices[1])
             mesho.indices.append(polygon.vertices[0])
-            # mesho.indices.extend(polygon.vertices)
 
         flags = Primitive.Triangles | Primitive.Indexed
 
@@ -113,6 +119,8 @@ def save(operator, context, filepath,
             else:
                 flags |= Primitive.NoMaterial
 
+        bpy.data.meshes.remove(mesh)
+
         mesho.primitives.append(Primitive(0, len(mesho.indices), flags))
         mesho.vertsPerFrame = len(mesho.verts)
 
@@ -121,7 +129,13 @@ def save(operator, context, filepath,
         nodei = len(shape.nodes)
         shape.nodes.append(nodeo)
         shape.default_translations.append(Point(*bobj.location))
-        shape.default_rotations.append(Quaternion(*bobj.rotation_quaternion))
+        # shape.default_rotations.append(Quaternion(*bobj.rotation_quaternion))
+        shape.default_rotations.append(Quaternion(
+            bobj.rotation_quaternion[1],
+            bobj.rotation_quaternion[2],
+            bobj.rotation_quaternion[3],
+            -bobj.rotation_quaternion[0]
+        ))
         # ^ this needs to consider bobj.rotation_mode!
 
         # Now put the Mesh in an Object
@@ -130,7 +144,7 @@ def save(operator, context, filepath,
         shape.objects.append(objecto)
 
     shape.subshapes.append(Subshape(firstNode=0, firstObject=0, firstDecal=0, numNodes=len(shape.nodes), numObjects=len(shape.objects), numDecals=0))
-    shape.detail_levels.append(DetailLevel(name=shape.name("Detail-1"), subshape=0, objectDetail=0, size=1.0, polyCount=poly_count))
+    shape.detail_levels.append(DetailLevel(name=shape.name("detail-100"), subshape=0, objectDetail=0, size=100.0, polyCount=poly_count))
 
     shape.smallest_size = 1.401298464324817e-45
     shape.bounds = Box(Point(*smin), Point(*smax))
