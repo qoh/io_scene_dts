@@ -256,14 +256,14 @@ def load(operator, context, filepath,
         for i, node in enumerate(shape.nodes):
             amt = bpy.data.armatures.new(shape.names[node.name])
             bnode = bpy.data.objects.new(name=shape.names[node.name], object_data=amt)
-            bnode.location = mathutils.Vector(shape.default_translations[i])
+            bnode.location = mathutils.Vector(shape.default_translations[i].tuple())
 
             bnode.rotation_mode = "QUATERNION"
             bnode.rotation_quaternion = mathutils.Quaternion((
-                -shape.default_rotations[i][3],
-                shape.default_rotations[i][0],
-                shape.default_rotations[i][1],
-                shape.default_rotations[i][2]
+                -shape.default_rotations[i].w,
+                shape.default_rotations[i].x,
+                shape.default_rotations[i].y,
+                shape.default_rotations[i].z
             ))
 
             context.scene.objects.link(bnode)
@@ -353,7 +353,7 @@ def load(operator, context, filepath,
                     mesh_material_apply[i] = material_index
 
         # Now add faces & vertices and parent it to the armature if any
-        bmesh.from_pydata(mesh.verts, [], faces)
+        bmesh.from_pydata(tuple(v.tuple() for v in mesh.verts), (), faces)
         bmesh.update()
 
         # Assign all the materials first

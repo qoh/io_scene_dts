@@ -200,6 +200,8 @@ class DtsShape(object):
 		self.smallest_detail_level = 0
 		self.radius = 0.0
 		self.radius_tube = 0.0
+		print("point is", Point)
+		print("tuple is", tuple)
 		self.center = Point(0.0, 0.0, 0.0)
 		self.bounds = Box(Point(0.0, 0.0, 0.0), Point(0.0, 0.0, 0.0))
 
@@ -212,6 +214,22 @@ class DtsShape(object):
 			self._names_lookup[string.lower()] = index
 
 		return index
+
+	def get_world(self, nodeid):
+		chain = [nodeid]
+
+		while self.nodes[nodeid].parent != -1:
+			nodeid = self.nodes[nodeid].parent
+			chain.append(nodeid)
+
+		trans = Point(0, 0, 0)
+		rot = Quaternion(0, 0, 0, 1)
+
+		for i in reversed(chain):
+			trans += rot.apply(self.default_rotations[i])
+			rot = self.default_rotations[i] * rot
+
+		return trans, rot
 
 	def save(self, fd, dtsVersion=24):
 		stream = DtsOutputStream(dtsVersion)
@@ -236,7 +254,7 @@ class DtsShape(object):
 			len(self.meshes),
 			len(self.names),
 		)
-		stream.write_float(self.smallest_size)
+		stream.write32(int(self.smallest_size))
 		stream.write32(self.smallest_detail_level)
 		stream.guard(0)
 

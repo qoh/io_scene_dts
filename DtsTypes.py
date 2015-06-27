@@ -3,59 +3,106 @@ from struct import pack, unpack
 from enum import Enum
 import math
 
-Point3D = namedtuple("Point3D", "x y z")
-def __str__(self):
-	x = math.floor(self.x * 10000 + 0.5) / 10000
-	y = math.floor(self.y * 10000 + 0.5) / 10000
-	z = math.floor(self.z * 10000 + 0.5) / 10000
-	return "({}, {}, {})".format(x, y, z)
-Point3D.__str__ = __str__
-Point3D.__repr__ = __str__
+# Point2D = namedtuple("Point2D", "x y")
+# def __str__(self):
+# 	x = math.floor(self.x * 10000 + 0.5) / 10000
+# 	y = math.floor(self.y * 10000 + 0.5) / 10000
+# 	return "({}, {})".format(x, y)
+# Point2D.__str__ = __str__
+# Point2D.__repr__ = __str__
 
-Point2D = namedtuple("Point2D", "x y")
-def __str__(self):
-	x = math.floor(self.x * 10000 + 0.5) / 10000
-	y = math.floor(self.y * 10000 + 0.5) / 10000
-	return "({}, {})".format(x, y)
-Point2D.__str__ = __str__
-Point2D.__repr__ = __str__
+class Point3D(object):
+	def __init__(self, x=0, y=0, z=0):
+		self.x = x
+		self.y = y
+		self.z = z
 
-# class Point3D(tuple):
-# 	@property
-# 	def x(self):
-# 		return self[0]
+	# def __iter__(self):
+	# 	yield self.x
+	# 	yield self.y
+	# 	yield self.z
 
-# 	@property
-# 	def y(self):
-# 		return self[1]
+	def __str__(self):
+		x = math.floor(self.x / 10000 + 0.5) * 10000
+		y = math.floor(self.y / 10000 + 0.5) * 10000
+		z = math.floor(self.z / 10000 + 0.5) * 10000
+		return "({}, {}, {})".format(x, y, z)
 
-# 	@property
-# 	def z(self):
-# 		return self[2]
-	
-# 	def __str__(self):
-# 		x = math.floor(self.x / 10000 + 0.5) * 10000
-# 		y = math.floor(self.y / 10000 + 0.5) * 10000
-# 		z = math.floor(self.z / 10000 + 0.5) * 10000
-# 		return "({}, {}, {})".format(x, y, z)
+	def len(self):
+		return math.sqrt(self.x ** 2 + self.y ** 2 + self.z ** 2)
 
-# class Point2D(tuple):
-# 	@property
-# 	def x(self):
-# 		return self[0]
+	def __add__(self, other):
+		return Point3D(self.x + other.x, self.y + other.y, self.z + other.z)
 
-# 	@property
-# 	def y(self):
-# 		return self[1]
+	def __sub__(self, other):
+		return Point3D(self.x - other.x, self.y - other.y, self.z - other.z)
 
-# 	def __str__(self):
-# 		x = math.floor(self.x / 10000 + 0.5) * 10000
-# 		y = math.floor(self.y / 10000 + 0.5) * 10000
-# 		return "({}, {}, {})".format(x, y)
+	def tuple(self):
+		return (self.x, self.y, self.z)
+
+class Point2D(object):
+	def __init__(self, x=0, y=0):
+		self.x = 0
+		self.y = 0
+
+	def __str__(self):
+		x = math.floor(self.x / 10000 + 0.5) * 10000
+		y = math.floor(self.y / 10000 + 0.5) * 10000
+		return "({}, {}, {})".format(x, y)
+
+class Box(object):
+	def __init__(self, min=None, max=None):
+		if min == None: min = Point3D()
+		if max == None: max = Point3D()
+
+		self.min = min
+		self.max = max
 
 Point = Point3D
-Box = namedtuple("Box", "min max")
-Quaternion = namedtuple("Quaternion", "x y z w")
+# Box = namedtuple("Box", "min max")
+
+class Quaternion(object):
+	def __init__(self, x=0, y=0, z=0, w=1):
+		self.x = x
+		self.y = y
+		self.z = z
+		self.w = w
+
+	# def __iter__(self):
+	# 	yield self.x
+	# 	yield self.y
+	# 	yield self.z
+	# 	yield self.w
+
+	def __mul__(self, other):
+		return Quaternion(
+			+self.x*other.w +self.y*other.z -self.z*other.y +self.w*other.x,
+			-self.x*other.z +self.y*other.w +self.z*other.x +self.w*other.y,
+			+self.x*other.y -self.y*other.x +self.z*other.w +self.w*other.z,
+			-self.x*other.x -self.y*other.y -self.z*other.z +self.w*other.w)
+
+	def apply(self, v):
+		v0 = v.x
+		v1 = v.y
+		v2 = v.z
+		v3 = 0.0
+		c0 = -self.x
+		c1 = -self.y
+		c2 = -self.z
+		c3 = self.w
+		s0 = self.x
+		s1 = self.y
+		s2 = self.z
+		s3 = self.w
+		ir0 = +c0*v3 +c1*v2 -c2*v1 +c3*v0
+		ir1 = -c0*v2 +c1*v3 +c2*v0 +c3*v1
+		ir2 = +c0*v1 -c1*v0 +c2*v3 +c3*v2
+		ir3 = -c0*v0 -c1*v1 -c2*v2 +c3*v3
+		r0 = +ir0*s3 +ir1*s2 -ir2*s1 +ir3*s0
+		r1 = -ir0*s2 +ir1*s3 +ir2*s0 +ir3*s1
+		r2 = +ir0*s1 -ir1*s0 +ir2*s3 +ir3*s2
+		#r3 = -ir0*s0 -ir1*s1 -ir2*s2 +ir3*s3
+		return Point(r0, r1, r2)
 
 class Node(object):
 	def __init__(self, name, parent=-1, firstObject=-1, child=-1, sibling=-1):
@@ -219,6 +266,42 @@ class Mesh(object):
 		self.primitives = []
 		self.indices = []
 		self.mindices = []
+
+	def calculate_bounds(self, trans, rot):
+		box = Box(
+			Point( 10e30,  10e30,  10e30),
+			Point(-10e30, -10e30, -10e30))
+
+		for vert in self.verts:
+			co = rot.apply(vert) + trans
+
+			box.min.x = min(box.min.x, co.x)
+			box.min.y = min(box.min.y, co.y)
+			box.min.z = min(box.min.z, co.z)
+			box.max.x = max(box.max.x, co.x)
+			box.max.y = max(box.max.y, co.y)
+			box.max.z = max(box.max.z, co.z)
+
+		return box
+
+	def calculate_radius(self, trans, rot, center):
+		radius = 0.0
+
+		for vert in self.verts:
+			tv = rot.apply(vert) + trans
+			radius = max(radius, (tv - center).len())
+
+		return radius
+
+	def calculate_radius_tube(self, trans, rot, center):
+		radius = 0
+
+		for vert in self.verts:
+			tv = rot.apply(vert) + trans
+			delta = tv - center
+			radius = max(radius, Point(delta.x, delta.y, 0).len())
+
+		return radius
 
 	def write(self, stream):
 		stream.write32(self.type.value)

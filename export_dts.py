@@ -18,8 +18,8 @@ def save(operator, context, filepath,
     shape = DtsShape()
 
     poly_count = 0
-    smin = [0, 0, 0]
-    smax = [0, 0, 0]
+    smin = [10e30, 10e30, 10e30]
+    smax = [-10e30, -10e30, -10e30]
 
     material_lookup = {}
     blank_material_index = None
@@ -51,35 +51,36 @@ def save(operator, context, filepath,
         meshi = len(shape.meshes)
         shape.meshes.append(mesho)
 
-        mmin = [0, 0, 0]
-        mmax = [0, 0, 0]
+        # mmin = [10e30, 10e30, 10e30]
+        # mmax = [-10e30, -10e30, -10e30]
 
         for vertex in mesh.vertices:
-            mmin[0] = min(mmin[0], vertex.co.x)
-            mmin[1] = min(mmin[1], vertex.co.y)
-            mmin[2] = min(mmin[2], vertex.co.z)
-            mmax[0] = min(mmax[0], vertex.co.x)
-            mmax[1] = min(mmax[1], vertex.co.y)
-            mmax[2] = min(mmax[2], vertex.co.z)
-            smin[0] = min(smin[0], vertex.co.x)
-            smin[1] = min(smin[1], vertex.co.y)
-            smin[2] = min(smin[2], vertex.co.z)
-            smax[0] = min(smax[0], vertex.co.x)
-            smax[1] = min(smax[1], vertex.co.y)
-            smax[2] = min(smax[2], vertex.co.z)
+            # mmin[0] = min(mmin[0], vertex.co.x)
+            # mmin[1] = min(mmin[1], vertex.co.y)
+            # mmin[2] = min(mmin[2], vertex.co.z)
+            # mmax[0] = min(mmax[0], vertex.co.x)
+            # mmax[1] = min(mmax[1], vertex.co.y)
+            # mmax[2] = min(mmax[2], vertex.co.z)
+            # smin[0] = min(smin[0], vertex.co.x)
+            # smin[1] = min(smin[1], vertex.co.y)
+            # smin[2] = min(smin[2], vertex.co.z)
+            # smax[0] = min(smax[0], vertex.co.x)
+            # smax[1] = min(smax[1], vertex.co.y)
+            # smax[2] = min(smax[2], vertex.co.z)
 
-            radius = sqrt(vertex.co.x**2 + vertex.co.y**2 + vertex.co.z**2)
-            radius_tube = sqrt(vertex.co.x**2 + vertex.co.y**2)
-            mesho.radius = max(mesho.radius, radius)
-            shape.radius = max(shape.radius, radius)
-            shape.radius_tube = max(shape.radius_tube, radius_tube)
+            # radius = sqrt(vertex.co.x**2 + vertex.co.y**2 + vertex.co.z**2)
+            # radius_tube = sqrt(vertex.co.x**2 + vertex.co.y**2)
+            # mesho.radius = max(mesho.radius, radius)
+            # shape.radius = max(shape.radius, radius)
+            # shape.radius_tube = max(shape.radius_tube, radius_tube)
 
             mesho.verts.append(Point(*vertex.co))
             mesho.normals.append(Point(*vertex.normal))
             mesho.enormals.append(0)
             mesho.tverts.append(Point2D(0, 0))
 
-        mesho.bounds = Box(Point(*mmin), Point(*mmax))
+        # mesho.bounds = Box(Point(*mmin), Point(*mmax))
+        mesho.bounds = mesho.calculate_bounds(Point(), Quaternion())
 
         for polygon in mesh.polygons:
             poly_count += 1
@@ -144,10 +145,49 @@ def save(operator, context, filepath,
         shape.objects.append(objecto)
 
     shape.subshapes.append(Subshape(firstNode=0, firstObject=0, firstDecal=0, numNodes=len(shape.nodes), numObjects=len(shape.objects), numDecals=0))
-    shape.detail_levels.append(DetailLevel(name=shape.name("detail-100"), subshape=0, objectDetail=0, size=100.0, polyCount=poly_count))
+    shape.detail_levels.append(DetailLevel(name=shape.name("detail-1"), subshape=0, objectDetail=0, size=1, polyCount=poly_count))
 
-    shape.smallest_size = 1.401298464324817e-45
-    shape.bounds = Box(Point(*smin), Point(*smax))
+    # Figure out all the things
+    shape.smallest_size = None
+    shape.smallest_detail_level = None
+
+    for i, lod in enumerate(shape.detail_levels):
+        if lod.size >= 0 and (shape.smallest_size == None or lod.size < shape.smallest_size):
+            shape.smallest_size = lod.size
+            shape.smallest_detail_level = i
+
+    shape.bounds = Box(
+        Point( 10e30,  10e30,  10e30),
+        Point(-10e30, -10e30, -10e30))
+
+    for i, obj in enumerate(shape.objects):
+        trans, rot = shape.get_world(obj.node)
+
+        for j in range(0, obj.numMeshes):
+            mesh = shape.meshes[obj.firstMesh + j]
+            bounds = mesh.calculate_bounds(trans, rot)
+
+            shape.bounds.min.x = min(shape.bounds.min.x, bounds.min.x)
+            shape.bounds.min.y = min(shape.bounds.min.y, bounds.min.y)
+            shape.bounds.min.z = min(shape.bounds.min.z, bounds.min.z)
+            shape.bounds.max.x = max(shape.bounds.max.x, bounds.max.x)
+            shape.bounds.max.y = max(shape.bounds.max.y, bounds.max.y)
+            shape.bounds.max.z = max(shape.bounds.max.z, bounds.max.z)
+
+    shape.center = Point(
+        (shape.bounds.min.x + shape.bounds.max.x) / 2,
+        (shape.bounds.min.y + shape.bounds.max.y) / 2,
+        (shape.bounds.min.z + shape.bounds.max.z) / 2)
+    shape.radius = 0
+    shape.radius_tube = 0
+
+    for i, obj in enumerate(shape.objects):
+        trans, rot = shape.get_world(obj.node)
+
+        for j in range(0, obj.numMeshes):
+            mesh = shape.meshes[obj.firstMesh + j]
+            shape.radius = max(shape.radius, mesh.calculate_radius(trans, rot, shape.center))
+            shape.radius_tube = max(shape.radius_tube, mesh.calculate_radius_tube(trans, rot, shape.center))
 
     with open(filepath, "wb") as fd:
         shape.save(fd)
