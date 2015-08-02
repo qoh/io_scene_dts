@@ -3,11 +3,14 @@ from math import sqrt
 
 from .DtsShape import DtsShape
 from .DtsTypes import *
+from .write_report import write_debug_report
 
 def save(operator, context, filepath,
          use_selection=True,
          blank_material=True,
-         force_flatshade=True):
+         force_flatshade=True,
+         force_opaque=False,
+         debug_report=True):
     scene = context.scene
 
     if use_selection:
@@ -28,11 +31,11 @@ def save(operator, context, filepath,
 
     # Let's try this
     print("Creating root")
-    rooto = Node(shape.name("root-catch"))
+    rooto = Node(shape.name("exporter-root"))
     rooti = len(shape.nodes)
     shape.nodes.append(rooto)
-    shape.default_translations.append(Point(0, 0, 0))
-    shape.default_rotations.append(Quaternion(0, 0, 0, 1))
+    shape.default_translations.append(Point())
+    shape.default_rotations.append(Quaternion())
 
     for bobj in objects:
         print("Processing object " + bobj.name + "(" + bobj.type + ")")
@@ -65,42 +68,25 @@ def save(operator, context, filepath,
         meshi = len(shape.meshes)
         shape.meshes.append(mesho)
 
-        # mmin = [10e30, 10e30, 10e30]
-        # mmax = [-10e30, -10e30, -10e30]
-
         for vertex in mesh.vertices:
-            # mmin[0] = min(mmin[0], vertex.co.x)
-            # mmin[1] = min(mmin[1], vertex.co.y)
-            # mmin[2] = min(mmin[2], vertex.co.z)
-            # mmax[0] = min(mmax[0], vertex.co.x)
-            # mmax[1] = min(mmax[1], vertex.co.y)
-            # mmax[2] = min(mmax[2], vertex.co.z)
-            # smin[0] = min(smin[0], vertex.co.x)
-            # smin[1] = min(smin[1], vertex.co.y)
-            # smin[2] = min(smin[2], vertex.co.z)
-            # smax[0] = min(smax[0], vertex.co.x)
-            # smax[1] = min(smax[1], vertex.co.y)
-            # smax[2] = min(smax[2], vertex.co.z)
-
-            # radius = sqrt(vertex.co.x**2 + vertex.co.y**2 + vertex.co.z**2)
-            # radius_tube = sqrt(vertex.co.x**2 + vertex.co.y**2)
-            # mesho.radius = max(mesho.radius, radius)
-            # shape.radius = max(shape.radius, radius)
-            # shape.radius_tube = max(shape.radius_tube, radius_tube)
-
             mesho.verts.append(Point(*vertex.co))
             mesho.normals.append(Point(*vertex.normal))
             mesho.enormals.append(0)
             mesho.tverts.append(Point2D(0, 0))
 
-        # mesho.bounds = Box(Point(*mmin), Point(*mmax))
-        mesho.bounds = mesho.calculate_bounds(Point(), Quaternion())
-
         for polygon in mesh.polygons:
             poly_count += 1
+            # mesho.primitives.append(Primitive(len(mesho.indices), 3, Primitive.Triangles | Primitive.Indexed | Primitive.NoMaterial))
             mesho.indices.append(polygon.vertices[2])
             mesho.indices.append(polygon.vertices[1])
             mesho.indices.append(polygon.vertices[0])
+
+        mesho.bounds = mesho.calculate_bounds(Point(), Quaternion())
+        mesho.center = Point(
+            (mesho.bounds.min.x + mesho.bounds.max.x) / 2,
+            (mesho.bounds.min.y + mesho.bounds.max.y) / 2,
+            (mesho.bounds.min.z + mesho.bounds.max.z) / 2)
+        mesho.radius = mesho.calculate_radius(Point(), Quaternion(), mesho.center)
 
         flags = Primitive.Triangles | Primitive.Indexed
 
@@ -116,7 +102,7 @@ def save(operator, context, filepath,
                 material_lookup[material] = material_index
                 mat_flags = Material.SWrap | Material.TWrap | Material.NeverEnvMap
 
-                if material.use_transparency:
+                if material.use_transparency and not force_opaque:
                     mat_flags |= Material.Translucent
                 if material.use_shadeless:
                     mat_flags |= Material.SelfIlluminating
@@ -147,27 +133,34 @@ def save(operator, context, filepath,
         nodei = len(shape.nodes)
         shape.nodes.append(nodeo)
         shape.default_translations.append(Point(*bobj.location))
-        # shape.default_rotations.append(Quaternion(*bobj.rotation_quaternion))
-        shape.default_rotations.append(Quaternion(
-            bobj.rotation_quaternion[1],
-            bobj.rotation_quaternion[2],
-            bobj.rotation_quaternion[3],
-            -bobj.rotation_quaternion[0]
-        ))
-        # ^ this needs to consider bobj.rotation_mode!
+
+        if bobj.rotation_mode == "QUATERNION":
+            rot = bobj.rotation_quaternion
+        else:
+            rot = bobj.rotation_euler.to_quaternion()
+        # other rotation modes?
+
+        shape.default_rotations.append(
+            Quaternion(rot[1], rot[2], rot[3], -rot[0])
+        )
+
+        # whatever
+        # shape.meshes.append(mesho)
 
         # Now put the Mesh in an Object
         print("  creating object " + bobj.name + " with 1 mesh")
         objecto = Object(shape.name(bobj.name), numMeshes=1, firstMesh=meshi, node=nodei)
+        # objecto = Object(shape.name(bobj.name), numMeshes=2, firstMesh=meshi, node=nodei)
         objecti = len(shape.objects)
         shape.objects.append(objecto)
         shape.objectstates.append(ObjectState(1065353216, 0, 0))
 
     print("Creating subshape with " + str(len(shape.nodes)) + " nodes and " + str(len(shape.objects)) + " objects")
     shape.subshapes.append(Subshape(firstNode=0, firstObject=0, firstDecal=0, numNodes=len(shape.nodes), numObjects=len(shape.objects), numDecals=0))
-    print("Creating detail-1 LOD")
-    shape.detail_levels.append(DetailLevel(name=shape.name("detail-1"), subshape=0, objectDetail=0, size=1, polyCount=poly_count))
-    # shape.detail_levels.append(DetailLevel(name=shape.name("col-1"), subshape=0, objectDetail=0, size=-1, polyCount=poly_count))
+    print("Creating Detail-1 LOD")
+    shape.detail_levels.append(DetailLevel(name=shape.name("Detail-1"), subshape=0, objectDetail=0, size=1, polyCount=poly_count))
+    # print("Creating Collision-1 LOD")
+    # shape.detail_levels.append(DetailLevel(name=shape.name("Collision-1"), subshape=0, objectDetail=1, size=-1, polyCount=poly_count))
 
     # Figure out all the things
     print("Computing bounds")
@@ -182,6 +175,8 @@ def save(operator, context, filepath,
     shape.bounds = Box(
         Point( 10e30,  10e30,  10e30),
         Point(-10e30, -10e30, -10e30))
+    shape.radius = 0
+    shape.radius_tube = 0
 
     for i, obj in enumerate(shape.objects):
         trans, rot = shape.get_world(obj.node)
@@ -190,7 +185,9 @@ def save(operator, context, filepath,
             mesh = shape.meshes[obj.firstMesh + j]
             bounds = mesh.calculate_bounds(trans, rot)
 
-            print(bounds.min.x, bounds.min.y, bounds.min.z, bounds.max.x, bounds.max.y, bounds.max.z)
+            shape.radius = max(shape.radius, mesh.calculate_radius(trans, rot, shape.center))
+            shape.radius_tube = max(shape.radius_tube, mesh.calculate_radius_tube(trans, rot, shape.center))
+
             shape.bounds.min.x = min(shape.bounds.min.x, bounds.min.x)
             shape.bounds.min.y = min(shape.bounds.min.y, bounds.min.y)
             shape.bounds.min.z = min(shape.bounds.min.z, bounds.min.z)
@@ -202,16 +199,9 @@ def save(operator, context, filepath,
         (shape.bounds.min.x + shape.bounds.max.x) / 2,
         (shape.bounds.min.y + shape.bounds.max.y) / 2,
         (shape.bounds.min.z + shape.bounds.max.z) / 2)
-    shape.radius = 0
-    shape.radius_tube = 0
 
-    for i, obj in enumerate(shape.objects):
-        trans, rot = shape.get_world(obj.node)
-
-        for j in range(0, obj.numMeshes):
-            mesh = shape.meshes[obj.firstMesh + j]
-            shape.radius = max(shape.radius, mesh.calculate_radius(trans, rot, shape.center))
-            shape.radius_tube = max(shape.radius_tube, mesh.calculate_radius_tube(trans, rot, shape.center))
+    if debug_report:
+        write_debug_report(filepath + ".txt", shape)
 
     with open(filepath, "wb") as fd:
         shape.save(fd)

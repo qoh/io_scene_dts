@@ -102,6 +102,18 @@ class ExportDTS(bpy.types.Operator, ExportHelper):
             default=True,
             )
 
+    # force_opaque = BoolProperty(
+    #         name="Force Opaque (temp.)",
+    #         description="",
+    #         default=False,
+    #         )
+
+    debug_report = BoolProperty(
+        name="Write debug report",
+        description="Dump out all the information from the DTS to a file",
+        default=False,
+        )
+
     check_extension = True
 
     def execute(self, context):

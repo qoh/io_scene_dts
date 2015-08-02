@@ -3,29 +3,16 @@ from struct import pack, unpack
 from enum import Enum
 import math
 
-# Point2D = namedtuple("Point2D", "x y")
-# def __str__(self):
-# 	x = math.floor(self.x * 10000 + 0.5) / 10000
-# 	y = math.floor(self.y * 10000 + 0.5) / 10000
-# 	return "({}, {})".format(x, y)
-# Point2D.__str__ = __str__
-# Point2D.__repr__ = __str__
-
 class Point3D(object):
 	def __init__(self, x=0, y=0, z=0):
 		self.x = x
 		self.y = y
 		self.z = z
 
-	# def __iter__(self):
-	# 	yield self.x
-	# 	yield self.y
-	# 	yield self.z
-
-	def __str__(self):
-		x = math.floor(self.x / 10000 + 0.5) * 10000
-		y = math.floor(self.y / 10000 + 0.5) * 10000
-		z = math.floor(self.z / 10000 + 0.5) * 10000
+	def __repr__(self):
+		x = math.floor(self.x * 10000 + 0.5) / 10000
+		y = math.floor(self.y * 10000 + 0.5) / 10000
+		z = math.floor(self.z * 10000 + 0.5) / 10000
 		return "({}, {}, {})".format(x, y, z)
 
 	def len(self):
@@ -37,6 +24,9 @@ class Point3D(object):
 	def __sub__(self, other):
 		return Point3D(self.x - other.x, self.y - other.y, self.z - other.z)
 
+	def copy(self):
+		return Point3D(self.x, self.y, self.z)
+
 	def tuple(self):
 		return (self.x, self.y, self.z)
 
@@ -45,9 +35,9 @@ class Point2D(object):
 		self.x = 0
 		self.y = 0
 
-	def __str__(self):
-		x = math.floor(self.x / 10000 + 0.5) * 10000
-		y = math.floor(self.y / 10000 + 0.5) * 10000
+	def __repr__(self):
+		x = math.floor(self.x * 10000 + 0.5) / 10000
+		y = math.floor(self.y * 10000 + 0.5) / 10000
 		return "({}, {})".format(x, y)
 
 class Box(object):
@@ -58,8 +48,10 @@ class Box(object):
 		self.min = min
 		self.max = max
 
+	def __repr__(self):
+		return "({}, {})".format(self.min, self.max)
+
 Point = Point3D
-# Box = namedtuple("Box", "min max")
 
 class Quaternion(object):
 	def __init__(self, x=0, y=0, z=0, w=1):
@@ -68,18 +60,19 @@ class Quaternion(object):
 		self.z = z
 		self.w = w
 
-	# def __iter__(self):
-	# 	yield self.x
-	# 	yield self.y
-	# 	yield self.z
-	# 	yield self.w
-
 	def __mul__(self, other):
 		return Quaternion(
 			+self.x*other.w +self.y*other.z -self.z*other.y +self.w*other.x,
 			-self.x*other.z +self.y*other.w +self.z*other.x +self.w*other.y,
 			+self.x*other.y -self.y*other.x +self.z*other.w +self.w*other.z,
 			-self.x*other.x -self.y*other.y -self.z*other.z +self.w*other.w)
+
+	def __repr__(self):
+		x = math.floor(self.x / 10000 + 0.5) * 10000
+		y = math.floor(self.y / 10000 + 0.5) * 10000
+		z = math.floor(self.z / 10000 + 0.5) * 10000
+		w = math.floor(self.w / 10000 + 0.5) * 10000
+		return "({}, {}, {}, {})".format(x, y, z, w)
 
 	def apply(self, v):
 		v0 = v.x
