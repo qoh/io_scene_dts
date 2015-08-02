@@ -35,17 +35,9 @@ class DtsOutputStream(object):
 		if len(self.buffer16) % 2 == 1: self.buffer16.append(0)
 		while len(self.buffer8) % 4 != 0: self.buffer8.append(0)
 
-		print("buffer32 len = {}".format(len(self.buffer32)))
-		print("buffer16 len = {}".format(len(self.buffer16)))
-		print("buffer8  len = {}".format(len(self.buffer8)))
-
 		end32  =         len(self.buffer32)
 		end16  = end32 + len(self.buffer16) // 2
 		end8   = end16 + len(self.buffer8 ) // 4
-
-		print("end32 = {}".format(end32))
-		print("end16 = {}".format(end16))
-		print("end8  = {}".format(end8))
 
 		fd.write(pack("hhiii",
 			self.dtsVersion, self.exporterVersion,
@@ -195,7 +187,7 @@ class DtsShape(object):
 		self.sequences = []
 		self.names = []
 		self._names_lookup = {}
-		
+
 		self.smallest_size = 0.0
 		self.smallest_detail_level = 0
 		self.radius = 0.0
@@ -508,6 +500,14 @@ class DtsShape(object):
 			self.node_scales_uniform = [None] * n_nodescaleuniform
 			self.node_scales_aligned = [None] * n_nodescalealigned
 			self.node_scales_arbitrary = [None] * n_nodescalearbitrary
+		# ???
+		# print(stream.dtsVersion)
+		# print(stream.sequence)
+		# if stream.dtsVersion > 21:
+		# 	what1 = stream.read32()
+		# 	what2 = stream.read32()
+		# 	what3 = stream.read32()
+		# 	stream.guard()
 
 		# Ground transformations
 		if stream.dtsVersion > 23:
@@ -561,35 +561,8 @@ class DtsShape(object):
 		n_sequence = unpack("i", fd.read(4))[0]
 		self.sequences = [None] * n_sequence
 
-		def readBitSet(fd):
-			dummy = unpack("i", fd.read(4))[0]
-			numWords = unpack("i", fd.read(4))[0]
-			return unpack(str(numWords) + "i", fd.read(4 * numWords))
-
 		for i in range(n_sequence):
-			nameIndex = unpack("i", fd.read(4))[0]
-			flags = unpack("I", fd.read(4))[0]
-			numKeyframes = unpack("i", fd.read(4))[0]
-			duration = unpack("f", fd.read(4))[0]
-			priority = unpack("i", fd.read(4))[0]
-			firstGroundFrame = unpack("i", fd.read(4))[0]
-			numGroundFrames = unpack("i", fd.read(4))[0]
-			baseRotation = unpack("i", fd.read(4))[0]
-			baseTranslation = unpack("i", fd.read(4))[0]
-			baseScale = unpack("i", fd.read(4))[0]
-			baseObjectState = unpack("i", fd.read(4))[0]
-			baseDecalState = unpack("i", fd.read(4))[0]
-			firstTrigger = unpack("i", fd.read(4))[0]
-			numTriggers = unpack("i", fd.read(4))[0]
-			toolBegin = unpack("f", fd.read(4))[0]
-			rotationMatters = readBitSet(fd)
-			translationMatters = readBitSet(fd)
-			scaleMatters = readBitSet(fd)
-			decalMatters = readBitSet(fd)
-			iflMatters = readBitSet(fd)
-			visMatters = readBitSet(fd)
-			frameMatters = readBitSet(fd)
-			matFrameMatters = readBitSet(fd)
+			self.sequences[i].append(Sequence.read(fd))
 
 		material_type = unpack("b", fd.read(1))[0]
 		assert material_type == 0x1
@@ -617,7 +590,7 @@ class DtsShape(object):
 		if stream.dtsVersion == 25:
 			for i in range(n_material):
 				fd.read(4)
-		
+
 		for i in range(n_material):
 			self.materials[i].detailScale = unpack("f", fd.read(4))[0]
 		for i in range(n_material):

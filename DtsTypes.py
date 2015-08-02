@@ -48,7 +48,7 @@ class Point2D(object):
 	def __str__(self):
 		x = math.floor(self.x / 10000 + 0.5) * 10000
 		y = math.floor(self.y / 10000 + 0.5) * 10000
-		return "({}, {}, {})".format(x, y)
+		return "({}, {})".format(x, y)
 
 class Box(object):
 	def __init__(self, min=None, max=None):
@@ -408,3 +408,66 @@ class Material(object):
 		self.detailMap = detailMap
 		self.detailScale = detailScale
 		self.reflectance = reflectance
+
+class Sequence(object):
+	def __init__(self):
+		# todo: get rid of this
+		self.nameIndex = None
+		self.flags = None
+		self.numKeyframes = None
+		self.duration = None
+		self.priority = None
+		self.firstGroundFrame = None
+		self.numGroundFrames = None
+		self.baseRotation = None
+		self.baseTranslation = None
+		self.baseScale = None
+		self.baseObjectState = None
+		self.baseDecalState = None
+		self.firstTrigger = None
+		self.numTriggers = None
+		self.toolBegin = None
+		self.rotationMatters = None
+		self.translationMatters = None
+		self.scaleMatters = None
+		self.decalMatters = None
+		self.iflMatters = None
+		self.visMatters = None
+		self.frameMatters = None
+		self.matFrameMatters = None
+
+	@classmethod
+	def read_bit_set(cls, fd):
+		dummy = unpack("i", fd.read(4))[0]
+		numWords = unpack("i", fd.read(4))[0]
+		return unpack(str(numWords) + "i", fd.read(4 * numWords))
+
+	@classmethod
+	def read(cls, fd):
+		seq = cls()
+
+		seq.nameIndex = unpack("i", fd.read(4))[0]
+		seq.flags = unpack("I", fd.read(4))[0]
+		seq.numKeyframes = unpack("i", fd.read(4))[0]
+		seq.duration = unpack("f", fd.read(4))[0]
+		seq.priority = unpack("i", fd.read(4))[0]
+		seq.firstGroundFrame = unpack("i", fd.read(4))[0]
+		seq.numGroundFrames = unpack("i", fd.read(4))[0]
+		seq.baseRotation = unpack("i", fd.read(4))[0]
+		seq.baseTranslation = unpack("i", fd.read(4))[0]
+		seq.baseScale = unpack("i", fd.read(4))[0]
+		seq.baseObjectState = unpack("i", fd.read(4))[0]
+		seq.baseDecalState = unpack("i", fd.read(4))[0]
+		seq.firstTrigger = unpack("i", fd.read(4))[0]
+		seq.numTriggers = unpack("i", fd.read(4))[0]
+		seq.toolBegin = unpack("f", fd.read(4))[0]
+		seq.rotationMatters = readBitSet(fd)
+		seq.translationMatters = readBitSet(fd)
+		seq.scaleMatters = cls.read_bit_set(fd)
+		seq.decalMatters = cls.read_bit_set(fd)
+		seq.iflMatters = cls.read_bit_set(fd)
+		seq.visMatters = cls.read_bit_set(fd)
+		seq.frameMatters = cls.read_bit_set(fd)
+		seq.matFrameMatters = cls.read_bit_set(fd)
+
+		return seq

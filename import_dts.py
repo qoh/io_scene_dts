@@ -172,6 +172,32 @@ def write_debug_report(filepath, shape):
         for i, name in enumerate(shape.names):
             p("  " + str(i) + " = " + name)
 
+        p("Sequences (" + str(len(shape.sequences)) + "):")
+        for i, seq in enumerate(shape.sequences):
+            p("  " + str(i) + " " + shape.names[seq.nameIndex])
+            p("    flags: " + str(seq.flags))
+            p("    numKeyframes: " + str(seq.numKeyframes))
+            p("    duration: " + str(seq.duration))
+            p("    priority: " + str(seq.priority))
+            p("    firstGroundFrame: " + str(seq.firstGroundFrame))
+            p("    numGroundFrames: " + str(seq.numGroundFrames))
+            p("    baseRotation: " + str(seq.baseRotation))
+            p("    baseTranslation: " + str(seq.baseTranslation))
+            p("    baseScale: " + str(seq.baseScale))
+            p("    baseObjectState: " + str(seq.baseObjectState))
+            p("    baseDecalState: " + str(seq.baseDecalState))
+            p("    firstTrigger: " + str(seq.firstTrigger))
+            p("    numTriggers: " + str(seq.numTriggers))
+            p("    toolBegin: " + str(seq.toolBegin))
+            p("    rotationMatters: " + str(seq.rotationMatters))
+            p("    translationMatters: " + str(seq.translationMatters))
+            p("    scaleMatters: " + str(seq.scaleMatters))
+            p("    decalMatters: " + str(seq.decalMatters))
+            p("    iflMatters: " + str(seq.iflMatters))
+            p("    visMatters: " + str(seq.visMatters))
+            p("    frameMatters: " + str(seq.frameMatters))
+            p("    matFrameMatters: " + str(seq.matFrameMatters))
+
 from random import random
 
 default_materials = {

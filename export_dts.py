@@ -24,17 +24,31 @@ def save(operator, context, filepath,
     material_lookup = {}
     blank_material_index = None
 
+    print("Exporting scene to DTS")
+
+    # Let's try this
+    print("Creating root")
+    rooto = Node(shape.name("root-catch"))
+    rooti = len(shape.nodes)
+    shape.nodes.append(rooto)
+    shape.default_translations.append(Point(0, 0, 0))
+    shape.default_rotations.append(Quaternion(0, 0, 0, 1))
+
     for bobj in objects:
+        print("Processing object " + bobj.name + "(" + bobj.type + ")")
+
         if bobj.type != "MESH":
-            print("skipping " + bobj.name)
+            print("  not a MESH, skipping")
             continue
 
         if force_flatshade:
+            print("  edge split")
             # Hack in flatshading
             scene.objects.active = bobj
             bpy.ops.object.modifier_add(type="EDGE_SPLIT")
             bobj.modifiers[-1].split_angle = 0
 
+        print("  bmesh triangulation")
         mesh = bobj.to_mesh(scene, force_flatshade, "PREVIEW")
         bm = bmesh.new()
         bm.from_mesh(mesh)
@@ -91,10 +105,13 @@ def save(operator, context, filepath,
         flags = Primitive.Triangles | Primitive.Indexed
 
         if len(mesh.materials) > 0:
+            # TODO: per-face material exporting
+            print("  processing materials")
             material = mesh.materials[0]
             material_index = material_lookup.get(material)
 
             if material_index == None:
+                print("    creating material for blender mat " + material.name)
                 material_index = len(shape.materials)
                 material_lookup[material] = material_index
                 mat_flags = Material.SWrap | Material.TWrap | Material.NeverEnvMap
@@ -126,7 +143,7 @@ def save(operator, context, filepath,
         mesho.vertsPerFrame = len(mesho.verts)
 
         # Make a Node for the future Object
-        nodeo = Node(shape.name(bobj.name))
+        nodeo = Node(shape.name(bobj.name), parent=rooti) # set parent
         nodei = len(shape.nodes)
         shape.nodes.append(nodeo)
         shape.default_translations.append(Point(*bobj.location))
@@ -140,19 +157,25 @@ def save(operator, context, filepath,
         # ^ this needs to consider bobj.rotation_mode!
 
         # Now put the Mesh in an Object
+        print("  creating object " + bobj.name + " with 1 mesh")
         objecto = Object(shape.name(bobj.name), numMeshes=1, firstMesh=meshi, node=nodei)
         objecti = len(shape.objects)
         shape.objects.append(objecto)
+        shape.objectstates.append(ObjectState(1065353216, 0, 0))
 
+    print("Creating subshape with " + str(len(shape.nodes)) + " nodes and " + str(len(shape.objects)) + " objects")
     shape.subshapes.append(Subshape(firstNode=0, firstObject=0, firstDecal=0, numNodes=len(shape.nodes), numObjects=len(shape.objects), numDecals=0))
+    print("Creating detail-1 LOD")
     shape.detail_levels.append(DetailLevel(name=shape.name("detail-1"), subshape=0, objectDetail=0, size=1, polyCount=poly_count))
+    # shape.detail_levels.append(DetailLevel(name=shape.name("col-1"), subshape=0, objectDetail=0, size=-1, polyCount=poly_count))
 
     # Figure out all the things
+    print("Computing bounds")
     shape.smallest_size = None
     shape.smallest_detail_level = None
 
     for i, lod in enumerate(shape.detail_levels):
-        if lod.size >= 0 and (shape.smallest_size == None or lod.size < shape.smallest_size):
+        if shape.smallest_size == None or (lod.size >= 0 and lod.size < shape.smallest_size):
             shape.smallest_size = lod.size
             shape.smallest_detail_level = i
 
@@ -167,6 +190,7 @@ def save(operator, context, filepath,
             mesh = shape.meshes[obj.firstMesh + j]
             bounds = mesh.calculate_bounds(trans, rot)
 
+            print(bounds.min.x, bounds.min.y, bounds.min.z, bounds.max.x, bounds.max.y, bounds.max.z)
             shape.bounds.min.x = min(shape.bounds.min.x, bounds.min.x)
             shape.bounds.min.y = min(shape.bounds.min.y, bounds.min.y)
             shape.bounds.min.z = min(shape.bounds.min.z, bounds.min.z)
