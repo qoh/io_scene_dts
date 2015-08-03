@@ -1,7 +1,5 @@
 # io_scene_dts
 
-A modern Blender plugin for working with DTS/DSQ assets. Includes an importer and an exporter.
-
 ### Goals
 
 * Implement import and export of all detail levels, nodes, objects, meshes, materials and sequences from/to DTS/DSQ files.
