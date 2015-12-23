@@ -145,7 +145,7 @@ class IflMaterial(object):
 		self.numFrames = numFrames
 
 	def write(self, stream):
-		self.write32(
+		stream.write32(
 			self.name, self.slot, self.firstFrame,
 			self.time, self.numFrames)
 
