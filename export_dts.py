@@ -173,7 +173,7 @@ def save(operator, context, filepath,
         # objecto = Object(shape.name(bobj.name), numMeshes=2, firstMesh=meshi, node=nodei)
         objecti = len(shape.objects)
         shape.objects.append(objecto)
-        shape.objectstates.append(ObjectState(1065353216, 0, 0))
+        shape.objectstates.append(ObjectState(1.0, 0, 0))
 
     print("Creating subshape with " + str(len(shape.nodes)) + " nodes and " + str(len(shape.objects)) + " objects")
     shape.subshapes.append(Subshape(firstNode=0, firstObject=0, firstDecal=0, numNodes=len(shape.nodes), numObjects=len(shape.objects), numDecals=0))

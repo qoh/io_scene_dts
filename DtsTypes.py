@@ -171,11 +171,12 @@ class ObjectState(object):
 		self.matFrame = matFrame
 
 	def write(self, stream):
-		stream.write32(self.vis, self.frame, self.matFrame)
+		stream.write_float(self.vis)
+		stream.write32(self.frame, self.matFrame)
 
 	@classmethod
 	def read(cls, stream):
-		return cls(stream.read32(), stream.read32(), stream.read32())
+		return cls(stream.read_float(), stream.read32(), stream.read32())
 
 class Trigger(object):
 	def __init__(self, state, pos):
