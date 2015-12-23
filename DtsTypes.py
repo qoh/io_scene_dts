@@ -32,8 +32,8 @@ class Point3D(object):
 
 class Point2D(object):
 	def __init__(self, x=0, y=0):
-		self.x = 0
-		self.y = 0
+		self.x = x
+		self.y = y
 
 	def __repr__(self):
 		x = math.floor(self.x * 10000 + 0.5) / 10000
@@ -402,6 +402,25 @@ class Material(object):
 		self.detailScale = detailScale
 		self.reflectance = reflectance
 
+def read_bit_set(fd):
+	dummy, numWords = unpack("<ii", fd.read(8))
+	words = unpack(str(numWords) + "i", fd.read(4 * numWords))
+	total = len(words) * 32
+	return [(words[i >> 5] & (1 << (i & 31))) != 0 for i in range(total)]
+
+def write_bit_set(fd, bits):
+	numWords = int(math.ceil(len(bits) / 32.0))
+	words = [0] * numWords
+
+	for i, bit in enumerate(bits):
+		if bit:
+			words[i >> 5] |= 1 << (i & 31)
+
+	fd.write(pack("<ii", numWords, numWords))
+
+	for word in words:
+		fd.write(pack("<i", word))
+
 class Sequence(object):
 	def __init__(self):
 		# todo: get rid of this
@@ -420,6 +439,7 @@ class Sequence(object):
 		self.firstTrigger = None
 		self.numTriggers = None
 		self.toolBegin = None
+
 		self.rotationMatters = None
 		self.translationMatters = None
 		self.scaleMatters = None
@@ -428,6 +448,32 @@ class Sequence(object):
 		self.visMatters = None
 		self.frameMatters = None
 		self.matFrameMatters = None
+
+	def write(self, fd):
+		fd.write(pack("<i", self.nameIndex))
+		fd.write(pack("<I", self.flags))
+		fd.write(pack("<i", self.numKeyframes))
+		fd.write(pack("<f", self.duration))
+		fd.write(pack("<i", self.priority))
+		fd.write(pack("<i", self.firstGroundFrame))
+		fd.write(pack("<i", self.numGroundFrames))
+		fd.write(pack("<i", self.baseRotation))
+		fd.write(pack("<i", self.baseTranslation))
+		fd.write(pack("<i", self.baseScale))
+		fd.write(pack("<i", self.baseObjectState))
+		fd.write(pack("<i", self.baseDecalState))
+		fd.write(pack("<i", self.firstTrigger))
+		fd.write(pack("<i", self.numTriggers))
+		fd.write(pack("<f", self.toolBegin))
+		
+		write_bit_set(fd, self.rotationMatters)
+		write_bit_set(fd, self.translationMatters)
+		write_bit_set(fd, self.scaleMatters)
+		write_bit_set(fd, self.decalMatters)
+		write_bit_set(fd, self.iflMatters)
+		write_bit_set(fd, self.visMatters)
+		write_bit_set(fd, self.frameMatters)
+		write_bit_set(fd, self.matFrameMatters)
 
 	@classmethod
 	def read_bit_set(cls, fd):
@@ -454,13 +500,14 @@ class Sequence(object):
 		seq.firstTrigger = unpack("i", fd.read(4))[0]
 		seq.numTriggers = unpack("i", fd.read(4))[0]
 		seq.toolBegin = unpack("f", fd.read(4))[0]
-		seq.rotationMatters = readBitSet(fd)
-		seq.translationMatters = readBitSet(fd)
-		seq.scaleMatters = cls.read_bit_set(fd)
-		seq.decalMatters = cls.read_bit_set(fd)
-		seq.iflMatters = cls.read_bit_set(fd)
-		seq.visMatters = cls.read_bit_set(fd)
-		seq.frameMatters = cls.read_bit_set(fd)
-		seq.matFrameMatters = cls.read_bit_set(fd)
+
+		seq.rotationMatters = read_bit_set(fd)
+		seq.translationMatters = read_bit_set(fd)
+		seq.scaleMatters = read_bit_set(fd)
+		seq.decalMatters = read_bit_set(fd)
+		seq.iflMatters = read_bit_set(fd)
+		seq.visMatters = read_bit_set(fd)
+		seq.frameMatters = read_bit_set(fd)
+		seq.matFrameMatters = read_bit_set(fd)
 
 		return seq

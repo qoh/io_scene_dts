@@ -35,6 +35,15 @@ def write_debug_report(filepath, shape):
         for each in shape.default_rotations:
             p("  " + str(each))
 
+        p("Node scales uniform:")
+        p(", ".join(map(str, shape.node_scales_uniform)))
+        p("Node scales aligned:")
+        p(", ".join(map(str, shape.node_scales_aligned)))
+        p("Node scales arbitrary:")
+        p(", ".join(map(str, shape.node_scales_arbitrary)))
+        p("Node scalerots arbitrary:")
+        p(", ".join(map(str, shape.node_scalerots_arbitrary)))
+
         p("Object states (" + str(len(shape.objectstates)) + "):")
         for i, state in enumerate(shape.objectstates):
             p("  " + str(i))

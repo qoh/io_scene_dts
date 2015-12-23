@@ -192,8 +192,6 @@ class DtsShape(object):
 		self.smallest_detail_level = 0
 		self.radius = 0.0
 		self.radius_tube = 0.0
-		print("point is", Point)
-		print("tuple is", tuple)
 		self.center = Point(0.0, 0.0, 0.0)
 		self.bounds = Box(Point(0.0, 0.0, 0.0), Point(0.0, 0.0, 0.0))
 
@@ -226,6 +224,8 @@ class DtsShape(object):
 	def save(self, fd, dtsVersion=24):
 		stream = DtsOutputStream(dtsVersion)
 
+		assert len(self.node_scales_arbitrary) == len(self.node_scalerots_arbitrary)
+
 		# Header
 		stream.write32(
 			len(self.nodes),
@@ -248,6 +248,11 @@ class DtsShape(object):
 		)
 		stream.write32(int(self.smallest_size))
 		stream.write32(self.smallest_detail_level)
+
+		if dtsVersion > 24:
+			# write morphs
+			pass
+
 		stream.guard(0)
 
 		# Bounds
@@ -304,19 +309,19 @@ class DtsShape(object):
 		for point in self.node_translations:
 			stream.write_point(point)
 		for quat in self.node_rotations:
-			stream.write_point(quat)
+			stream.write_quat(quat)
 		stream.guard(8)
 
 		# Default scales
 		for point in self.node_scales_uniform:
-			stream.write_point(point) # shouldn't this be float!?
+			stream.write_float(point)
 		for point in self.node_scales_aligned:
 			stream.write_point(point)
 		for point in self.node_scales_arbitrary:
 			stream.write_point(point)
-		if dtsVersion >= 26:
-			for quat in self.node_scalerots_arbitrary:
-				stream.write_quat(quat)
+		# if dtsVersion >= 26:
+		for quat in self.node_scalerots_arbitrary:
+			stream.write_quat(quat)
 		stream.guard(9)
 
 		# Ground transformations
@@ -352,6 +357,10 @@ class DtsShape(object):
 			mesh.write(stream)
 		stream.guard()
 
+		if dtsVersion > 24:
+			# Morphs
+			pass
+
 		# Names
 		for name in self.names:
 			stream.write_string(name)
@@ -361,10 +370,10 @@ class DtsShape(object):
 		stream.flush(fd)
 
 		# Sequences
-		ws(fd, "i", len(self.sequences))
+		ws(fd, "<i", len(self.sequences))
 
 		for seq in self.sequences:
-			raise RuntimeError()
+			seq.write(fd)
 
 		# Materials
 		ws(fd, "b", 0x1)
@@ -492,14 +501,16 @@ class DtsShape(object):
 
 		# Default scales
 		if stream.dtsVersion > 21:
-			self.node_scales_uniform = [stream.read_point() for i in range(n_nodescaleuniform)]
+			self.node_scales_uniform = [stream.read_float() for i in range(n_nodescaleuniform)]
 			self.node_scales_aligned = [stream.read_point() for i in range(n_nodescalealigned)]
 			self.node_scales_arbitrary = [stream.read_point() for i in range(n_nodescalearbitrary)]
+			self.node_scalerots_arbitrary = [stream.read_quat() for i in range(n_nodescalearbitrary)]
 			stream.guard()
 		else:
 			self.node_scales_uniform = [None] * n_nodescaleuniform
 			self.node_scales_aligned = [None] * n_nodescalealigned
 			self.node_scales_arbitrary = [None] * n_nodescalearbitrary
+			self.node_scalerots_arbitrary = [None] * n_nodescalearbitrary
 		# ???
 		# print(stream.dtsVersion)
 		# print(stream.sequence)
@@ -562,7 +573,7 @@ class DtsShape(object):
 		self.sequences = [None] * n_sequence
 
 		for i in range(n_sequence):
-			self.sequences[i].append(Sequence.read(fd))
+			self.sequences[i] = Sequence.read(fd)
 
 		material_type = unpack("b", fd.read(1))[0]
 		assert material_type == 0x1

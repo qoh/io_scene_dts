@@ -70,6 +70,8 @@ def load(operator, context, filepath,
 
     if debug_report:
         write_debug_report(filepath + ".txt", shape)
+        with open(filepath + ".pass.dts", "wb") as fd:
+            shape.save(fd)
 
     node_lod = {}
     scene_material_table = {}
