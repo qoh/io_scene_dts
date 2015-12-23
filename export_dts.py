@@ -69,30 +69,30 @@ def save(operator, context, filepath,
         shape.meshes.append(mesho)
 
         # So here's an experiment
-        tverts = {}
+        # tverts = {}
         # for i, loop in enumerate(mesh.loops):
         #     tverts[loop.vertex_index] = mesh.uv_layers[0].data[i].uv
-        lawur = mesh.uv_layers[0].data
-        for i, polygon in enumerate(mesh.polygons):
+        # lawur = mesh.uv_layers[0].data
+        # for i, polygon in enumerate(mesh.polygons):
             # for uv_index, l_index in enumerate(polygon.loop_indices):
             # for vi, uvi in zip(polygon.vertices, polygon.loop_indices):
             #     tverts[vi] = lawur[uvi].uv
             # for j, loop_index in polygon.loop_indices:
             #     loop =
-            pass
+        #     pass
 
-        # for vertex in mesh.vertices:
-        for numero, vertex in enumerate(mesh.vertices):
+        for vertex in mesh.vertices:
+        # for numero, vertex in enumerate(mesh.vertices):
             mesho.verts.append(Point(*vertex.co))
             mesho.normals.append(Point(*vertex.normal))
             mesho.enormals.append(0)
-            # mesho.tverts.append(Point2D(0, 0))
-            # uuuv = mesh.uv_layers[0].data[numero].uv
-            uuuv = tverts[numero]
-            mesho.tverts.append(Point2D(uuuv.x, uuuv.y))
+            mesho.tverts.append(Point2D(0, 0))
+            # # uuuv = mesh.uv_layers[0].data[numero].uv
+            # uuuv = tverts[numero]
+            # mesho.tverts.append(Point2D(uuuv.x, uuuv.y))
 
-        # for polygon in mesh.polygons:
-        for pi, polygon in enumerate(mesh.polygons):
+        for polygon in mesh.polygons:
+        # for pi, polygon in enumerate(mesh.polygons):
             poly_count += 1
             # mesho.primitives.append(Primitive(len(mesho.indices), 3, Primitive.Triangles | Primitive.Indexed | Primitive.NoMaterial))
             mesho.indices.append(polygon.vertices[2])

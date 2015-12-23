@@ -177,6 +177,7 @@ class DtsShape(object):
 		self.node_scales_aligned = []
 		self.node_scales_arbitrary = []
 		self.node_scalerots_uniform = []
+		self.node_scalerots_arbitrary = []
 		self.ground_translations = []
 		self.ground_rotations = []
 		self.objectstates = []
