@@ -48,16 +48,19 @@ class DtsOutputStream(object):
 
 	def write32(self, *values):
 		for value in values:
+			assert -2147483648 <= value <= 2147483647
 			assert type(value) == int, "type is {}, must be {}".format(type(value), int)
 		self.buffer32.extend(values)
 
 	def write16(self, *values):
 		for value in values:
+			assert -32768 <= value <= 32767
 			assert type(value) == int, "type is {}, must be {}".format(type(value), int)
 		self.buffer16.extend(values)
 
 	def write8(self, *values):
 		for value in values:
+			assert -128 <= value <= 127
 			assert type(value) == int, "type is {}, must be {}".format(type(value), int)
 		self.buffer8.extend(values)
 

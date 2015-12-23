@@ -40,18 +40,6 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
             options={'HIDDEN'},
             )
 
-    lod_as_empty = BoolProperty(
-        name="Include LODs",
-        description="Create parent empties for LODs in the shape",
-        default = True,
-        )
-
-    include_armatures = BoolProperty(
-        name="Armatures",
-        description="Import the full node->object hierarchy",
-        default=True,
-        )
-
     hide_default_player = BoolProperty(
         name="Hide Blockhead Nodes",
         description="Set extra avatar nodes to hidden",
@@ -83,12 +71,11 @@ class ExportDTS(bpy.types.Operator, ExportHelper):
             options={'HIDDEN'},
             )
 
-    # context group
-    use_selection = BoolProperty(
-            name="Selection Only",
-            description="Export selected objects only",
-            default=False,
-            )
+    # use_selection = BoolProperty(
+    #         name="Selection Only",
+    #         description="Export selected objects only",
+    #         default=False,
+    #         )
 
     blank_material = BoolProperty(
             name="Blank Material",
@@ -101,12 +88,6 @@ class ExportDTS(bpy.types.Operator, ExportHelper):
             description="Apply Edge Split to all meshes pre-export (this is a bad setting)",
             default=True,
             )
-
-    # force_opaque = BoolProperty(
-    #         name="Force Opaque (temp.)",
-    #         description="",
-    #         default=False,
-    #         )
 
     debug_report = BoolProperty(
         name="Write debug report",
