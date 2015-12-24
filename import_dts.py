@@ -81,6 +81,13 @@ def load(operator, context, filepath,
     for lod in shape.detail_levels:
         lod_by_mesh[lod.objectDetail] = lod
 
+    if "NodeOrder" in bpy.data.texts:
+        order_buf = bpy.data.texts["NodeOrder"]
+    else:
+        order_buf = bpy.data.texts.new("NodeOrder")
+
+    order_buf.from_string("\n".join(shape.names[node.name] for node in shape.nodes))
+
     for i, node in enumerate(shape.nodes):
         amt = bpy.data.armatures.new(shape.names[node.name])
         bnode = bpy.data.objects.new(name=shape.names[node.name], object_data=amt)

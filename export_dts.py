@@ -1,5 +1,6 @@
 import bpy, bmesh
 from math import sqrt
+from operator import attrgetter
 
 from .DtsShape import DtsShape
 from .DtsTypes import *
@@ -69,125 +70,234 @@ def save(operator, context, filepath,
 
     shape.smallest_detail_level = None
 
-    # For every object in the scene
-    for bobj in scene.objects:
-        print(bobj.type, bobj.name)
+    scene_meshes = filter(lambda bobj: bobj.type == "MESH", scene.objects)
+    scene_armatures = filter(lambda bobj: bobj.type == "ARMATURE", scene.objects)
 
-        # Deal with this based on what it is
-        # If it's something we can't handle, just skip it
-        if bobj.type == "ARMATURE":
-            parent = bobj.parent
+    if "NodeOrder" in bpy.data.texts:
+        order_list = bpy.data.texts["NodeOrder"].as_string().split("\n")
+        order_dict = {name: i for i, name in enumerate(order_list)}
 
-            if parent and parent.type != "ARMATURE":
-                return fail(operator, "Armatures may only be parented to other armatures. '{}' is parented to a {}.".format(bobj.name, parent.type))
+        scene_armatures = sorted(scene_armatures, key=lambda node: order_dict[node.name])
 
-            # Make DTS nodes for Blender armatures
-            print("Creating DTS Node", bobj.name)
-            node = Node(shape.name(bobj.name))
-            node_index = len(shape.nodes)
-            shape.nodes.append(node)
-            armature_nodes[bobj] = (node, node_index)
+    # First, go through all armatures and create DTS nodes for them
+    for armature in scene_armatures:
+        parent = armature.parent
 
-            if bobj in pending_attachments:
-                for object in pending_attachments[bobj]:
-                    object.node = node_index
-                del pending_attachments[bobj]
+        if parent and parent.type != "ARMATURE":
+            return fail(operator, "Armatures may only be parented to other armatures. '{}' is parented to a {}.".format(armature.name, parent.type))
 
-            shape.default_translations.append(Point(*bobj.location))
-            # Try to find a quaternion representation of the armature rotation
-            # TODO: Handle more than quaternion & euler
-            if bobj.rotation_mode == "QUATERNION":
-                rot = bobj.rotation_quaternion
-            else:
-                rot = bobj.rotation_euler.to_quaternion()
-            # Weird representation difference -wxyz -> xyzw
-            shape.default_rotations.append(Quaternion(rot[1], rot[2], rot[3], -rot[0]))
+        # Make DTS nodes for Blender armatures
+        print("Creating DTS Node", armature.name)
+        node = Node(shape.name(armature.name))
+        node_index = len(shape.nodes)
+        shape.nodes.append(node)
+        armature_nodes[armature] = (node, node_index)
 
-            # Try to parent all our children if they've already been added
-            for child in bobj.children:
-                if child.type == "ARMATURE" and child in armature_nodes:
-                    assert armature_nodes[child][0].parent == 0 # This should throw if everything is correct
-                    armature_nodes[child][0].parent = node_index
-                    print("Parenting DTS Node {} to {}".format(child.name, bobj.name))
-
-            # If this node has a parent armature, try to parent our new node to it (or do so when we get to it, above)
-            if parent:
-                if parent in armature_nodes:
-                    node.parent = armature_nodes[parent][1]
-                    print("Parenting DTS Node {} to {}".format(bobj.name, parent.name))
-            # No parent; this is supposed to be a root node. Either make it the root or parent it to the auto root.
-            elif root_node is None:
-                root_node = node
-                root_node_index = node_index
-            else:
-                node.parent = get_auto_root()[1]
-        elif bobj.type == "MESH":
-            # TODO: do something about the mesh translation/rotation as well
-            parent = bobj.parent
-
-            if parent:
-                if parent.type == "ARMATURE":
-                    if parent in armature_nodes:
-                        attach_node = armature_nodes[parent][1]
-                    else:
-                        attach_node = -1
-                else:
-                    return fail(operator, "Meshes may only be parented to armatures. '{}' is parented to a {}.".format(bobj.name, parent.type))
-            else:
-                attach_node = get_auto_root()[1]
-
-            if bobj.users_group:
-                if len(bobj.users_group) >= 2:
-                    print("Warning: Mesh {} is in multiple groups".format(bobj.name))
-
-                lod_name = bobj.users_group[0].name
-            else:
-                lod_name = "detail32"
-
-            if lod_name not in scene_lods:
-                match = re_lod_size.search(lod_name)
-
-                if match:
-                    lod_size = int(match.group(1))
-                else:
-                    print("Warning: LOD {} does not end with a size, assuming size 32".format(lod_name))
-                    lod_size = 32
-
-                if lod_size >= 0 and (shape.smallest_detail_level == None or lod_size < shape.smallest_detail_level):
-                    shape.smallest_detail_level = lod_size
-
-                print("Creating LOD {} with size {}".format(lod_name, lod_size))
-                scene_lods[lod_name] = DetailLevel(name=shape.name(lod_name), subshape=0, objectDetail=len(shape.detail_levels), size=lod_size, polyCount=0)
-                shape.detail_levels.append(scene_lods[lod_name])
-
-            name = bobj.name
-
-            if name not in scene_objects:
-                object = Object(shape.name(name), numMeshes=0, firstMesh=0, node=attach_node)
-                object_index = len(shape.objects)
-                shape.objects.append(object)
-                shape.objectstates.append(ObjectState(1.0, 0, 0))
-
-                if attach_node == -1:
-                    if parent in pending_attachments:
-                        pending_attachments[parent].append(object)
-                    else:
-                        pending_attachments[parent] = [object]
-
-                scene_objects[name] = (object, {})
-
-            if lod_name in scene_objects[name][1]:
-                print("Warning: Multiple objects {} in LOD {}, ignoring...".format(name, lod_name))
-            else:
-                scene_objects[name][1][lod_name] = bobj
+        shape.default_translations.append(Point(*armature.location))
+        # Try to find a quaternion representation of the armature rotation
+        # TODO: Handle more than quaternion & euler
+        if armature.rotation_mode == "QUATERNION":
+            rot = armature.rotation_quaternion
         else:
-            print("Skipping {} {}".format(bobj.type, bobj.name))
+            rot = armature.rotation_euler.to_quaternion()
+        # Weird representation difference -wxyz -> xyzw
+        shape.default_rotations.append(Quaternion(rot[1], rot[2], rot[3], -rot[0]))
 
-    assert not pending_attachments
+        # Try to parent all our children if they've already been added
+        for child in armature.children:
+            if child.type == "ARMATURE" and child in armature_nodes:
+                assert armature_nodes[child][0].parent == 0 # This should throw if everything is correct
+                armature_nodes[child][0].parent = node_index
+                print("Parenting DTS Node {} to {}".format(child.name, armature.name))
+
+        # If this node has a parent armature, try to parent our new node to it (or do so when we get to it, above)
+        if parent:
+            if parent in armature_nodes:
+                node.parent = armature_nodes[parent][1]
+                print("Parenting DTS Node {} to {}".format(armature.name, parent.name))
+        # No parent; this is supposed to be a root node. Either make it the root or parent it to the auto root.
+        elif root_node is None:
+            root_node = node
+            root_node_index = node_index
+        else:
+            # TODO: get rid of auto_root. it's nothing but trouble.
+            node.parent = get_auto_root()[1]
+
+    # Now that we have all the nodes, attach our fabled objects to them
+    for bobj in scene_meshes:
+        # TODO: do something about the mesh translation/rotation as well
+        parent = bobj.parent
+
+        if parent:
+            if parent.type == "ARMATURE":
+                attach_node = armature_nodes[parent][1]
+            else:
+                return fail(operator, "Meshes may only be parented to armatures. '{}' is parented to a {}.".format(bobj.name, parent.type))
+        else:
+            # shoo!
+            attach_node = get_auto_root()[1]
+
+        if bobj.users_group:
+            if len(bobj.users_group) >= 2:
+                print("Warning: Mesh {} is in multiple groups".format(bobj.name))
+
+            lod_name = bobj.users_group[0].name
+        else:
+            lod_name = "detail32"
+
+        if lod_name not in scene_lods:
+            match = re_lod_size.search(lod_name)
+
+            if match:
+                lod_size = int(match.group(1))
+            else:
+                print("Warning: LOD {} does not end with a size, assuming size 32".format(lod_name))
+                lod_size = 32
+
+            if lod_size >= 0 and (shape.smallest_detail_level == None or lod_size < shape.smallest_detail_level):
+                shape.smallest_detail_level = lod_size
+
+            print("Creating LOD {} with size {}".format(lod_name, lod_size))
+            scene_lods[lod_name] = DetailLevel(name=shape.name(lod_name), subshape=0, objectDetail=-1, size=lod_size, polyCount=0)
+            shape.detail_levels.append(scene_lods[lod_name])
+
+        name = bobj.name
+
+        if name not in scene_objects:
+            object = Object(shape.name(name), numMeshes=0, firstMesh=0, node=attach_node)
+            object_index = len(shape.objects)
+            shape.objects.append(object)
+            shape.objectstates.append(ObjectState(1.0, 0, 0))
+            scene_objects[name] = (object, {})
+
+        if lod_name in scene_objects[name][1]:
+            print("Warning: Multiple objects {} in LOD {}, ignoring...".format(name, lod_name))
+        else:
+            scene_objects[name][1][lod_name] = bobj
+
+    # # For every object in the scene
+    # for bobj in scene.objects:
+    #     print(bobj.type, bobj.name)
+
+    #     # Deal with this based on what it is
+    #     # If it's something we can't handle, just skip it
+    #     if bobj.type == "ARMATURE":
+    #         parent = bobj.parent
+
+    #         if parent and parent.type != "ARMATURE":
+    #             return fail(operator, "Armatures may only be parented to other armatures. '{}' is parented to a {}.".format(bobj.name, parent.type))
+
+    #         # Make DTS nodes for Blender armatures
+    #         print("Creating DTS Node", bobj.name)
+    #         node = Node(shape.name(bobj.name))
+    #         node_index = len(shape.nodes)
+    #         shape.nodes.append(node)
+    #         armature_nodes[bobj] = (node, node_index)
+
+    #         if bobj in pending_attachments:
+    #             for object in pending_attachments[bobj]:
+    #                 object.node = node_index
+    #             del pending_attachments[bobj]
+
+    #         shape.default_translations.append(Point(*bobj.location))
+    #         # Try to find a quaternion representation of the armature rotation
+    #         # TODO: Handle more than quaternion & euler
+    #         if bobj.rotation_mode == "QUATERNION":
+    #             rot = bobj.rotation_quaternion
+    #         else:
+    #             rot = bobj.rotation_euler.to_quaternion()
+    #         # Weird representation difference -wxyz -> xyzw
+    #         shape.default_rotations.append(Quaternion(rot[1], rot[2], rot[3], -rot[0]))
+
+    #         # Try to parent all our children if they've already been added
+    #         for child in bobj.children:
+    #             if child.type == "ARMATURE" and child in armature_nodes:
+    #                 assert armature_nodes[child][0].parent == 0 # This should throw if everything is correct
+    #                 armature_nodes[child][0].parent = node_index
+    #                 print("Parenting DTS Node {} to {}".format(child.name, bobj.name))
+
+    #         # If this node has a parent armature, try to parent our new node to it (or do so when we get to it, above)
+    #         if parent:
+    #             if parent in armature_nodes:
+    #                 node.parent = armature_nodes[parent][1]
+    #                 print("Parenting DTS Node {} to {}".format(bobj.name, parent.name))
+    #         # No parent; this is supposed to be a root node. Either make it the root or parent it to the auto root.
+    #         elif root_node is None:
+    #             root_node = node
+    #             root_node_index = node_index
+    #         else:
+    #             node.parent = get_auto_root()[1]
+    #     elif bobj.type == "MESH":
+    #         # TODO: do something about the mesh translation/rotation as well
+    #         parent = bobj.parent
+
+    #         if parent:
+    #             if parent.type == "ARMATURE":
+    #                 if parent in armature_nodes:
+    #                     attach_node = armature_nodes[parent][1]
+    #                 else:
+    #                     attach_node = -1
+    #             else:
+    #                 return fail(operator, "Meshes may only be parented to armatures. '{}' is parented to a {}.".format(bobj.name, parent.type))
+    #         else:
+    #             attach_node = get_auto_root()[1]
+
+    #         if bobj.users_group:
+    #             if len(bobj.users_group) >= 2:
+    #                 print("Warning: Mesh {} is in multiple groups".format(bobj.name))
+
+    #             lod_name = bobj.users_group[0].name
+    #         else:
+    #             lod_name = "detail32"
+
+    #         if lod_name not in scene_lods:
+    #             match = re_lod_size.search(lod_name)
+
+    #             if match:
+    #                 lod_size = int(match.group(1))
+    #             else:
+    #                 print("Warning: LOD {} does not end with a size, assuming size 32".format(lod_name))
+    #                 lod_size = 32
+
+    #             if lod_size >= 0 and (shape.smallest_detail_level == None or lod_size < shape.smallest_detail_level):
+    #                 shape.smallest_detail_level = lod_size
+
+    #             print("Creating LOD {} with size {}".format(lod_name, lod_size))
+    #             scene_lods[lod_name] = DetailLevel(name=shape.name(lod_name), subshape=0, objectDetail=-1, size=lod_size, polyCount=0)
+    #             shape.detail_levels.append(scene_lods[lod_name])
+
+    #         name = bobj.name
+
+    #         if name not in scene_objects:
+    #             object = Object(shape.name(name), numMeshes=0, firstMesh=0, node=attach_node)
+    #             object_index = len(shape.objects)
+    #             shape.objects.append(object)
+    #             shape.objectstates.append(ObjectState(1.0, 0, 0))
+
+    #             if attach_node == -1:
+    #                 if parent in pending_attachments:
+    #                     pending_attachments[parent].append(object)
+    #                 else:
+    #                     pending_attachments[parent] = [object]
+
+    #             scene_objects[name] = (object, {})
+
+    #         if lod_name in scene_objects[name][1]:
+    #             print("Warning: Multiple objects {} in LOD {}, ignoring...".format(name, lod_name))
+    #         else:
+    #             scene_objects[name][1][lod_name] = bobj
+    #     else:
+    #         print("Skipping {} {}".format(bobj.type, bobj.name))
+
+    # assert not pending_attachments
+
+    # Try to sort the detail levels? Maybe that fixes things?
+    shape.detail_levels.sort(key=attrgetter("size"), reverse=True)
 
     print("Detail levels:")
 
     for i, lod in enumerate(shape.detail_levels):
+        lod.objectDetail = i # this isn't the right place for this
         print(i, shape.names[lod.name])
 
     print("Adding meshes to objects...")
@@ -304,6 +414,33 @@ def save(operator, context, filepath,
             else:
                 print("Adding Null mesh for object {} in LOD {}".format(shape.names[object.name], lod_name))
                 shape.meshes.append(Mesh(MeshType.Null))
+
+    # Try to stay sane
+    # for node in shape.nodes:
+    #     node.firstObject = node.child = node.sibling = -1
+
+    # for i, node in enumerate(shape.nodes):
+    #     if node.parent >= 0:
+    #         if shape.nodes[node.parent].child < 0:
+    #             shape.nodes[node.parent].child = i
+    #         else:
+    #             child = shape.nodes[node.parent].child
+    #             while shape.nodes[child].sibling >= 0:
+    #                 child = shape.nodes[child].sibling
+    #             shape.nodes[child].sibling = i
+
+    # for i, object in enumerate(shape.objects):
+    #     object.sibling = -1
+    #     object.firstDecal = -1
+
+    #     if object.node >= 0:
+    #         if shape.nodes[object.node].firstObject < 0:
+    #             shape.nodes[object.node].firstObject = i
+    #         else:
+    #             objectIndex = shape.nodes[object.node].firstObject
+    #             while shape.objects[objectIndex].nextSibling >= 0:
+    #                 objectIndex = shape.objects[objectIndex].nextSibling
+    #             shape.objects[objectIndex].sibling = i
 
     print("Creating subshape with " + str(len(shape.nodes)) + " nodes and " + str(len(shape.objects)) + " objects")
     shape.subshapes.append(Subshape(firstNode=0, firstObject=0, firstDecal=0, numNodes=len(shape.nodes), numObjects=len(shape.objects), numDecals=0))
