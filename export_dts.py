@@ -1,6 +1,7 @@
 import bpy, bmesh
 from math import sqrt
 from operator import attrgetter
+from itertools import groupby
 
 from .DtsShape import DtsShape
 from .DtsTypes import *
@@ -14,6 +15,50 @@ def fail(operator, message):
     print("Error:", message)
     operator.report({"ERROR"}, message)
     return {"FINISHED"}
+
+def create_blank_material():
+    return Material(name="blank", flags=Material.SWrap | Material.TWrap | Material.NeverEnvMap, reflectanceMap=0)
+
+def export_material(mat, shape):
+    material_index = len(shape.materials)
+    flags = 0
+
+    if mat.use_transparency:
+        flags |= Material.Translucent
+    if mat.use_shadeless:
+        flags |= Material.SelfIlluminating
+    if mat.get("additive"):
+        flags |= Material.Additive
+    if mat.get("subtractive"):
+        flags |= Material.Subtractive
+    if not mat.get("noSWrap"):
+        flags |= Material.SWrap
+    if not mat.get("noTWrap"):
+        flags |= Material.TWrap
+    if not mat.get("envMap"):
+        flags |= Material.NeverEnvMap
+    if not mat.get("mipMap"):
+        flags |= Material.NoMipMap
+
+    if mat.get("ifl"):
+        flags |= Material.IFLMaterial
+
+        # TODO: keep IFL materials in a table by name?
+        # what would duplicates do?
+
+        ifl_index = len(shape.iflmaterials)
+        ifl = IflMaterial(
+            name=shape.name(mat["iflName"]),
+            slot=material_index,
+            firstFrame=mat.get("iflFirstFrame", 0),
+            numFrames=mat.get("iflNumFrames", 0),
+            time=mat.get("iflTime", 0))
+        shape.iflmaterials.append(ifl)
+
+    material = Material(name=mat.name, flags=flags)
+    shape.materials.append(material)
+
+    return material_index
 
 def save(operator, context, filepath,
          blank_material=True,
@@ -175,122 +220,6 @@ def save(operator, context, filepath,
         else:
             scene_objects[name][1][lod_name] = bobj
 
-    # # For every object in the scene
-    # for bobj in scene.objects:
-    #     print(bobj.type, bobj.name)
-
-    #     # Deal with this based on what it is
-    #     # If it's something we can't handle, just skip it
-    #     if bobj.type == "ARMATURE":
-    #         parent = bobj.parent
-
-    #         if parent and parent.type != "ARMATURE":
-    #             return fail(operator, "Armatures may only be parented to other armatures. '{}' is parented to a {}.".format(bobj.name, parent.type))
-
-    #         # Make DTS nodes for Blender armatures
-    #         print("Creating DTS Node", bobj.name)
-    #         node = Node(shape.name(bobj.name))
-    #         node_index = len(shape.nodes)
-    #         shape.nodes.append(node)
-    #         armature_nodes[bobj] = (node, node_index)
-
-    #         if bobj in pending_attachments:
-    #             for object in pending_attachments[bobj]:
-    #                 object.node = node_index
-    #             del pending_attachments[bobj]
-
-    #         shape.default_translations.append(Point(*bobj.location))
-    #         # Try to find a quaternion representation of the armature rotation
-    #         # TODO: Handle more than quaternion & euler
-    #         if bobj.rotation_mode == "QUATERNION":
-    #             rot = bobj.rotation_quaternion
-    #         else:
-    #             rot = bobj.rotation_euler.to_quaternion()
-    #         # Weird representation difference -wxyz -> xyzw
-    #         shape.default_rotations.append(Quaternion(rot[1], rot[2], rot[3], -rot[0]))
-
-    #         # Try to parent all our children if they've already been added
-    #         for child in bobj.children:
-    #             if child.type == "ARMATURE" and child in armature_nodes:
-    #                 assert armature_nodes[child][0].parent == 0 # This should throw if everything is correct
-    #                 armature_nodes[child][0].parent = node_index
-    #                 print("Parenting DTS Node {} to {}".format(child.name, bobj.name))
-
-    #         # If this node has a parent armature, try to parent our new node to it (or do so when we get to it, above)
-    #         if parent:
-    #             if parent in armature_nodes:
-    #                 node.parent = armature_nodes[parent][1]
-    #                 print("Parenting DTS Node {} to {}".format(bobj.name, parent.name))
-    #         # No parent; this is supposed to be a root node. Either make it the root or parent it to the auto root.
-    #         elif root_node is None:
-    #             root_node = node
-    #             root_node_index = node_index
-    #         else:
-    #             node.parent = get_auto_root()[1]
-    #     elif bobj.type == "MESH":
-    #         # TODO: do something about the mesh translation/rotation as well
-    #         parent = bobj.parent
-
-    #         if parent:
-    #             if parent.type == "ARMATURE":
-    #                 if parent in armature_nodes:
-    #                     attach_node = armature_nodes[parent][1]
-    #                 else:
-    #                     attach_node = -1
-    #             else:
-    #                 return fail(operator, "Meshes may only be parented to armatures. '{}' is parented to a {}.".format(bobj.name, parent.type))
-    #         else:
-    #             attach_node = get_auto_root()[1]
-
-    #         if bobj.users_group:
-    #             if len(bobj.users_group) >= 2:
-    #                 print("Warning: Mesh {} is in multiple groups".format(bobj.name))
-
-    #             lod_name = bobj.users_group[0].name
-    #         else:
-    #             lod_name = "detail32"
-
-    #         if lod_name not in scene_lods:
-    #             match = re_lod_size.search(lod_name)
-
-    #             if match:
-    #                 lod_size = int(match.group(1))
-    #             else:
-    #                 print("Warning: LOD {} does not end with a size, assuming size 32".format(lod_name))
-    #                 lod_size = 32
-
-    #             if lod_size >= 0 and (shape.smallest_detail_level == None or lod_size < shape.smallest_detail_level):
-    #                 shape.smallest_detail_level = lod_size
-
-    #             print("Creating LOD {} with size {}".format(lod_name, lod_size))
-    #             scene_lods[lod_name] = DetailLevel(name=shape.name(lod_name), subshape=0, objectDetail=-1, size=lod_size, polyCount=0)
-    #             shape.detail_levels.append(scene_lods[lod_name])
-
-    #         name = bobj.name
-
-    #         if name not in scene_objects:
-    #             object = Object(shape.name(name), numMeshes=0, firstMesh=0, node=attach_node)
-    #             object_index = len(shape.objects)
-    #             shape.objects.append(object)
-    #             shape.objectstates.append(ObjectState(1.0, 0, 0))
-
-    #             if attach_node == -1:
-    #                 if parent in pending_attachments:
-    #                     pending_attachments[parent].append(object)
-    #                 else:
-    #                     pending_attachments[parent] = [object]
-
-    #             scene_objects[name] = (object, {})
-
-    #         if lod_name in scene_objects[name][1]:
-    #             print("Warning: Multiple objects {} in LOD {}, ignoring...".format(name, lod_name))
-    #         else:
-    #             scene_objects[name][1][lod_name] = bobj
-    #     else:
-    #         print("Skipping {} {}".format(bobj.type, bobj.name))
-
-    # assert not pending_attachments
-
     # Try to sort the detail levels? Maybe that fixes things?
     shape.detail_levels.sort(key=attrgetter("size"), reverse=True)
 
@@ -301,6 +230,8 @@ def save(operator, context, filepath,
         print(i, shape.names[lod.name])
 
     print("Adding meshes to objects...")
+
+    material_table = {}
 
     for object, lods in scene_objects.values():
         print(shape.names[object.name])
@@ -356,11 +287,7 @@ def save(operator, context, filepath,
                     dmesh.enormals.append(0)
                     dmesh.tverts.append(Point2D(0, 0))
 
-                for polygon in mesh.polygons:
-                    lod.polyCount += 1
-                    dmesh.indices.append(polygon.vertices[2])
-                    dmesh.indices.append(polygon.vertices[1])
-                    dmesh.indices.append(polygon.vertices[0])
+                got_tvert = set()
 
                 dmesh.bounds = dmesh.calculate_bounds(Point(), Quaternion())
                 dmesh.center = Point(
@@ -369,78 +296,57 @@ def save(operator, context, filepath,
                     (dmesh.bounds.min.z + dmesh.bounds.max.z) / 2)
                 dmesh.radius = dmesh.calculate_radius(Point(), Quaternion(), dmesh.center)
 
-                flags = Primitive.Triangles | Primitive.Indexed
+                # Group all materials by their material_index
+                key = attrgetter("material_index")
+                grouped_polys = groupby(sorted(mesh.polygons, key=key), key=key)
+                grouped_polys = tuple(map(lambda t: (t[0], tuple(t[1])), grouped_polys))
 
-                # TODO: don't apply any materials to collision meshes
-                if len(mesh.materials) > 0:
-                    # TODO: per-face material exporting
-                    print("  processing materials")
-                    material = mesh.materials[0]
-                    material_index = material_lookup.get(material)
+                # Create a primitive from each group
+                for material_index, polys in grouped_polys:
+                    flags = Primitive.Triangles | Primitive.Indexed
 
-                    if material_index == None:
-                        print("    creating material for blender mat " + material.name)
-                        material_index = len(shape.materials)
-                        material_lookup[material] = material_index
-                        mat_flags = Material.SWrap | Material.TWrap | Material.NeverEnvMap
+                    if mesh.materials:
+                        bmat = mesh.materials[material_index]
 
-                        if material.use_transparency and not force_opaque:
-                            mat_flags |= Material.Translucent
-                        if material.use_shadeless:
-                            mat_flags |= Material.SelfIlluminating
-                        if "additive" in material:
-                            mat_flags |= Material.Additive
-                        if "subtractive" in material:
-                            mat_flags |= Material.Additive
+                        if bmat not in material_table:
+                            material_table[bmat] = export_material(bmat, shape)
 
-                        shape.materials.append(Material(name=material.name, flags=mat_flags))
-
-                    flags |= material_index & Primitive.MaterialMask
-                else:
-                    if blank_material:
-                        if blank_material_index == None:
-                            blank_material_index = len(shape.materials)
-                            shape.materials.append(Material(name="blank", flags=Material.SWrap | Material.TWrap | Material.NeverEnvMap, reflectanceMap=0))
-                        flags |= blank_material_index & Primitive.MaterialMask
+                        flags |= material_table[bmat] & Primitive.MaterialMask
                     else:
+                        # TODO: re-add blank materials
                         flags |= Primitive.NoMaterial
+
+                    lod.polyCount += len(polys)
+
+                    firstElement = len(dmesh.indices)
+
+                    for poly in polys:
+                        if mesh.uv_layers:
+                            data = mesh.uv_layers[0].data
+
+                            for vert_index, loop_index in zip(poly.vertices, poly.loop_indices):
+                                # if vert_index in got_tvert:
+                                #     print("Warning: Multiple tverts for", vert_index)
+
+                                uv = data[loop_index].uv
+                                dmesh.tverts[vert_index] = Point2D(uv.x, 1 - uv.y)
+                                # got_tvert.add(vert_index)
+
+                        dmesh.indices.append(poly.vertices[2])
+                        dmesh.indices.append(poly.vertices[1])
+                        dmesh.indices.append(poly.vertices[0])
+
+                    numElements = len(dmesh.indices) - firstElement
+                    dmesh.primitives.append(Primitive(firstElement, numElements, flags))
 
                 bpy.data.meshes.remove(mesh)
 
-                dmesh.primitives.append(Primitive(0, len(dmesh.indices), flags))
                 dmesh.vertsPerFrame = len(dmesh.verts)
 
                 ### Nobody leaves Hotel California
             else:
                 print("Adding Null mesh for object {} in LOD {}".format(shape.names[object.name], lod_name))
                 shape.meshes.append(Mesh(MeshType.Null))
-
-    # Try to stay sane
-    # for node in shape.nodes:
-    #     node.firstObject = node.child = node.sibling = -1
-
-    # for i, node in enumerate(shape.nodes):
-    #     if node.parent >= 0:
-    #         if shape.nodes[node.parent].child < 0:
-    #             shape.nodes[node.parent].child = i
-    #         else:
-    #             child = shape.nodes[node.parent].child
-    #             while shape.nodes[child].sibling >= 0:
-    #                 child = shape.nodes[child].sibling
-    #             shape.nodes[child].sibling = i
-
-    # for i, object in enumerate(shape.objects):
-    #     object.sibling = -1
-    #     object.firstDecal = -1
-
-    #     if object.node >= 0:
-    #         if shape.nodes[object.node].firstObject < 0:
-    #             shape.nodes[object.node].firstObject = i
-    #         else:
-    #             objectIndex = shape.nodes[object.node].firstObject
-    #             while shape.objects[objectIndex].nextSibling >= 0:
-    #                 objectIndex = shape.objects[objectIndex].nextSibling
-    #             shape.objects[objectIndex].sibling = i
 
     print("Creating subshape with " + str(len(shape.nodes)) + " nodes and " + str(len(shape.objects)) + " objects")
     shape.subshapes.append(Subshape(firstNode=0, firstObject=0, firstDecal=0, numNodes=len(shape.nodes), numObjects=len(shape.objects), numDecals=0))

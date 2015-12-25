@@ -24,6 +24,11 @@ class Point3D(object):
 	def __sub__(self, other):
 		return Point3D(self.x - other.x, self.y - other.y, self.z - other.z)
 
+	def __iter__(self):
+		yield self.x
+		yield self.y
+		yield self.z
+
 	def copy(self):
 		return Point3D(self.x, self.y, self.z)
 
@@ -39,6 +44,9 @@ class Point2D(object):
 		x = math.floor(self.x * 10000 + 0.5) / 10000
 		y = math.floor(self.y * 10000 + 0.5) / 10000
 		return "({}, {})".format(x, y)
+
+	def tuple(self):
+		return (self.x, self.y)
 
 class Box(object):
 	def __init__(self, min=None, max=None):
@@ -466,7 +474,7 @@ class Sequence(object):
 		fd.write(pack("<i", self.firstTrigger))
 		fd.write(pack("<i", self.numTriggers))
 		fd.write(pack("<f", self.toolBegin))
-		
+
 		write_bit_set(fd, self.rotationMatters)
 		write_bit_set(fd, self.translationMatters)
 		write_bit_set(fd, self.scaleMatters)

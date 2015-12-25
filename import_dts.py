@@ -1,6 +1,6 @@
 import bpy
-
 import mathutils
+from bpy_extras.io_utils import unpack_list
 
 from .DtsShape import DtsShape
 from .DtsTypes import *
@@ -33,7 +33,7 @@ default_materials = {
 for name, color in default_materials.items():
     default_materials[name] = (color[0] / 255, color[1] / 255, color[2] / 255)
 
-def import_material(dmat):
+def import_material(dmat, filepath):
     bmat = bpy.data.materials.new(dmat.name)
 
     if False:
@@ -55,8 +55,84 @@ def import_material(dmat):
         bmat["noSWrap"] = True
     if not (dmat.flags & Material.TWrap):
         bmat["noTWrap"] = True
+    if not (dmat.flags & Material.NeverEnvMap):
+        bmat["envMap"] = True
+    if not (dmat.flags & Material.NoMipMap):
+        bmat["mipMap"] = True
+    if dmat.flags & Material.IFLMaterial:
+        bmat["ifl"] = True
+
+    # TODO: MipMapZeroBorder, IFLFrame, DetailMap, BumpMap, ReflectanceMap
+    # AuxilaryMask?
 
     return bmat
+
+def create_bmesh(dmesh, materials, shape):
+    me = bpy.data.meshes.new("Mesh")
+
+    faces = []
+    material_indices = {}
+
+    indices = dmesh.indices
+
+    for prim in dmesh.primitives:
+        assert prim.type & Primitive.Indexed
+
+        dmat = None
+
+        if not (prim.type & Primitive.NoMaterial):
+            dmat = shape.materials[prim.type & Primitive.MaterialMask]
+
+            if dmat not in material_indices:
+                material_indices[dmat] = len(me.materials)
+                me.materials.append(materials[dmat])
+
+        if prim.type & Primitive.Strip:
+            even = True
+            for i in range(prim.firstElement + 2, prim.firstElement + prim.numElements):
+                if even:
+                    faces.append(((indices[i], indices[i - 1], indices[i - 2]), dmat))
+                else:
+                    faces.append(((indices[i - 2], indices[i - 1], indices[i]), dmat))
+                even = not even
+        elif prim.type & Primitive.Fan:
+            even = True
+            for i in range(prim.firstElement + 2, prim.firstElement + prim.numElements):
+                if even:
+                    faces.append(((indices[i], indices[i - 1], indices[0]), dmat))
+                else:
+                    faces.append(((indices[0], indices[i - 1], indices[i]), dmat))
+                even = not even
+        else: # Default to Triangle Lists (prim.type & Primitive.Triangles)
+            for i in range(prim.firstElement + 2, prim.firstElement + prim.numElements, 3):
+                faces.append(((indices[i], indices[i - 1], indices[i - 2]), dmat))
+
+    me.vertices.add(len(dmesh.verts))
+    me.vertices.foreach_set("co", unpack_list(dmesh.verts))
+    me.vertices.foreach_set("normal", unpack_list(dmesh.normals))
+
+    me.polygons.add(len(faces))
+    me.loops.add(len(faces) * 3)
+
+    me.uv_textures.new()
+    uvs = me.uv_layers[0]
+
+    for i, ((verts, dmat), poly) in enumerate(zip(faces, me.polygons)):
+        poly.loop_total = 3
+        poly.loop_start = i * 3
+
+        if dmat:
+            poly.material_index = material_indices[dmat]
+
+        for j, index in zip(poly.loop_indices, verts):
+            me.loops[j].vertex_index = index
+            uv = dmesh.tverts[index]
+            uvs.data[j].uv = (uv.x, 1 - uv.y)
+
+    me.validate()
+    me.update()
+
+    return me
 
 def load(operator, context, filepath,
          hide_default_player=False,
@@ -71,7 +147,20 @@ def load(operator, context, filepath,
         with open(filepath + ".pass.dts", "wb") as fd:
             shape.save(fd)
 
-    scene_material_table = {}
+    # Create a Blender material for each DTS material
+    materials = {}
+
+    for dmat in shape.materials:
+        materials[dmat] = import_material(dmat, filepath)
+
+    # Now assign IFL material properties where needed
+    for ifl in shape.iflmaterials:
+        mat = materials[shape.materials[ifl.slot]]
+        assert mat["ifl"] == True
+        mat["iflName"] = shape.names[ifl.name]
+        mat["iflFirstFrame"] = ifl.firstFrame
+        mat["iflNumFrames"] = ifl.numFrames
+        mat["iflTime"] = ifl.time
 
     # First load all the nodes into armatures
     nodes = [] # For accessing indices when parenting later
@@ -123,81 +212,7 @@ def load(operator, context, filepath,
                     shape.names[obj.name], mesh.type.name))
                 continue
 
-            faces = []
-
-            # Create a new mesh, update data later
-            bmesh = bpy.data.meshes.new(name="Mesh")
-
-            mesh_material_table = {}
-            mesh_material_apply = {}
-
-            # Go through all the primitives in the mesh and convert them to pydata faces
-            for prim in mesh.primitives:
-                material_dts = None
-
-                if not (prim.type & Primitive.NoMaterial):
-                    material_dts = shape.materials[prim.type & Primitive.MaterialMask]
-
-                apply_start = len(faces)
-
-                if prim.type & Primitive.Strip:
-                    even = True
-                    for i in range(prim.firstElement + 2, prim.firstElement + prim.numElements):
-                        if even:
-                            faces.append((mesh.indices[i], mesh.indices[i - 1], mesh.indices[i - 2]))
-                        else:
-                            faces.append((mesh.indices[i - 2], mesh.indices[i - 1], mesh.indices[i]))
-                        even = not even
-                elif prim.type & Primitive.Fan:
-                    even = True
-                    for i in range(prim.firstElement + 2, prim.firstElement + prim.numElements):
-                        if even:
-                            faces.append((mesh.indices[i], mesh.indices[i - 1], mesh.indices[0]))
-                        else:
-                            faces.append((mesh.indices[0], mesh.indices[i - 1], mesh.indices[i]))
-                        even = not even
-                else: # Default to Triangle Lists (prim.type & Primitive.Triangles)
-                    for i in range(prim.firstElement + 2, prim.firstElement + prim.numElements, 3):
-                        faces.append((mesh.indices[i], mesh.indices[i - 1], mesh.indices[i - 2]))
-
-                apply_end = len(faces)
-
-                if apply_end > apply_start and material_dts:
-                    material = scene_material_table.get(material_dts)
-
-                    if material == None:
-                        material = import_material(material_dts)
-                        scene_material_table[material_dts] = material
-
-                    material_index = mesh_material_table.get(material)
-
-                    if material_index == None:
-                        material_index = len(bmesh.materials)
-                        mesh_material_table[material] = material_index
-                        bmesh.materials.append(material)
-
-                    for i in range(apply_start, apply_end):
-                        mesh_material_apply[i] = material_index
-
-            # Now add faces & vertices and parent it to the armature if any
-            bmesh.from_pydata(tuple(v.tuple() for v in mesh.verts), (), faces)
-            bmesh.update()
-
-            # Assign all the materials first
-            if mesh_material_apply:
-                faces_no_mat = set(range(len(bmesh.polygons)))
-
-                for face_index, material_index in mesh_material_apply.items():
-                    bmesh.polygons[face_index].material_index = material_index
-                    faces_no_mat.remove(face_index)
-
-                if faces_no_mat:
-                    index_no_mat = len(bmesh.materials)
-                    bmesh.materials.append(None)
-
-                    for face_index in faces_no_mat:
-                        bmesh.polygons[face_index].material_index = index_no_material
-
+            bmesh = create_bmesh(mesh, materials, shape)
             bobj = bpy.data.objects.new(name=shape.names[obj.name], object_data=bmesh)
             context.scene.objects.link(bobj)
 
