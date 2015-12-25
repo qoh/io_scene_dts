@@ -60,13 +60,47 @@ def export_material(mat, shape):
 
     return material_index
 
+def get_parent_armature(ob):
+    parent = ob.parent
+    while parent:
+        if parent.type == "ARMATURE":
+            return parent
+        parent = parent.parent
+
+def get_deep_children(search, obs):
+    for ob in obs:
+        if ob.type == search:
+            yield ob
+        else:
+            yield from get_deep_children(search, ob.children)
+
+def explore_armatures(lookup, shape, obs, parent=-1):
+    for ob in obs:
+        if ob.type == "ARMATURE":
+            shape.default_translations.append(Point(*ob.location))
+            # Try to find a quaternion representation of the armature rotation
+            # TODO: Handle more than quaternion & euler
+            if ob.rotation_mode == "QUATERNION":
+                rot = ob.rotation_quaternion
+            else:
+                rot = ob.rotation_euler.to_quaternion()
+                # Weird representation difference -wxyz -> xyzw
+                shape.default_rotations.append(Quaternion(rot[1], rot[2], rot[3], -rot[0]))
+
+            node = Node(shape.name(ob.name), parent)
+            shape.nodes.append(node)
+            lookup[ob] = next_parent = node
+        else:
+            next_parent = parent
+
+        explore_armatures(lookup, shape, ob.children, next_parent)
+
 def save(operator, context, filepath,
          blank_material=True,
          force_flatshade=True,
          force_opaque=False,
          debug_report=True):
     scene = context.scene
-
     shape = DtsShape()
 
     poly_count = 0
@@ -78,36 +112,6 @@ def save(operator, context, filepath,
 
     print("Exporting scene to DTS")
 
-    root_node = None
-    root_node_index = None
-    using_auto_root = False
-
-    def get_auto_root():
-        nonlocal root_node, root_node_index, using_auto_root
-
-        if using_auto_root:
-            return root_node, root_node_index
-
-        print("Adding fallback root node...")
-        if shape.nodes:
-            # I feel like this won't work. The root node might have to be the first in the list.
-            print("Warning: Fallback root node is not the first node created. This could go badly.")
-
-        using_auto_root = True
-        node = Node(shape.name("__auto_root__"))
-        node_index = len(shape.nodes)
-        shape.nodes.append(node)
-        shape.default_translations.append(Point())
-        shape.default_rotations.append(Quaternion())
-
-        if root_node:
-            assert root_node.parent == -1
-            root_node.parent = node_index
-
-        root_node = node
-        root_node_index = node_index
-        return node, node_index
-
     armature_nodes = {}
     scene_lods = {}
     scene_objects = {}
@@ -118,69 +122,59 @@ def save(operator, context, filepath,
     scene_meshes = filter(lambda bobj: bobj.type == "MESH", scene.objects)
     scene_armatures = filter(lambda bobj: bobj.type == "ARMATURE", scene.objects)
 
-    if "NodeOrder" in bpy.data.texts:
-        order_list = bpy.data.texts["NodeOrder"].as_string().split("\n")
-        order_dict = {name: i for i, name in enumerate(order_list)}
+    lookup = {}
 
-        scene_armatures = sorted(scene_armatures, key=lambda node: order_dict[node.name])
+    root_scene = tuple(filter(lambda ob: not ob.parent, scene.objects))
 
-    # First, go through all armatures and create DTS nodes for them
-    for armature in scene_armatures:
-        parent = armature.parent
+    # Create a DTS node for every armature in the scene
+    explore_armatures(lookup, shape, root_scene)
 
-        if parent and parent.type != "ARMATURE":
-            return fail(operator, "Armatures may only be parented to other armatures. '{}' is parented to a {}.".format(armature.name, parent.type))
+    root_nodes = tuple(filter(lambda n: n.parent == -1, shape.nodes))
+    root_objects = tuple(get_deep_children("MESH", root_scene))
 
-        # Make DTS nodes for Blender armatures
-        print("Creating DTS Node", armature.name)
-        node = Node(shape.name(armature.name))
-        node_index = len(shape.nodes)
-        shape.nodes.append(node)
-        armature_nodes[armature] = (node, node_index)
+    print("# of root nodes", len(root_nodes))
+    print("# of root objects", len(root_objects))
 
-        shape.default_translations.append(Point(*armature.location))
-        # Try to find a quaternion representation of the armature rotation
-        # TODO: Handle more than quaternion & euler
-        if armature.rotation_mode == "QUATERNION":
-            rot = armature.rotation_quaternion
-        else:
-            rot = armature.rotation_euler.to_quaternion()
-        # Weird representation difference -wxyz -> xyzw
-        shape.default_rotations.append(Quaternion(rot[1], rot[2], rot[3], -rot[0]))
+    # Figure out if we should create our own root node
+    if len(root_nodes) > 1 or root_objects:
+        print("Auto root is needed")
 
-        # Try to parent all our children if they've already been added
-        for child in armature.children:
-            if child.type == "ARMATURE" and child in armature_nodes:
-                assert armature_nodes[child][0].parent == 0 # This should throw if everything is correct
-                armature_nodes[child][0].parent = node_index
-                print("Parenting DTS Node {} to {}".format(child.name, armature.name))
+        if "NodeOrder" in bpy.data.texts:
+            return fail(operator, "Auto root with specified NodeOrder")
 
-        # If this node has a parent armature, try to parent our new node to it (or do so when we get to it, above)
-        if parent:
-            if parent in armature_nodes:
-                node.parent = armature_nodes[parent][1]
-                print("Parenting DTS Node {} to {}".format(armature.name, parent.name))
-        # No parent; this is supposed to be a root node. Either make it the root or parent it to the auto root.
-        elif root_node is None:
-            root_node = node
-            root_node_index = node_index
-        else:
-            # TODO: get rid of auto_root. it's nothing but trouble.
-            node.parent = get_auto_root()[1]
+        auto_root = Node(shape.name("__auto_root__"))
+        shape.nodes.insert(0, auto_root)
+        shape.default_translations.append(Point())
+        shape.default_rotations.append(Quaternion())
+
+        for dangling_node in root_nodes:
+            dangling_node.parent = auto_root
+    elif "NodeOrder" in bpy.data.texts:
+        order = bpy.data.texts["NodeOrder"].as_string().split("\n")
+        key = {name: i for i, name in enumerate(order)}
+
+        shape.nodes = list(sorted(shape.nodes, key=lambda n: key[n.name]))
+
+    node_indices = {}
+
+    for index, node in enumerate(shape.nodes):
+        if not isinstance(node.parent, int):
+            node.parent = shape.nodes.index(node.parent)
+        node_indices[node] = index
+
+    lookup = {ob: node_indices[node] for ob, node in lookup.items()}
 
     # Now that we have all the nodes, attach our fabled objects to them
     for bobj in scene_meshes:
         # TODO: do something about the mesh translation/rotation as well
-        parent = bobj.parent
+        parent = get_parent_armature(bobj)
+        # parent = bobj.parent
 
         if parent:
-            if parent.type == "ARMATURE":
-                attach_node = armature_nodes[parent][1]
-            else:
-                return fail(operator, "Meshes may only be parented to armatures. '{}' is parented to a {}.".format(bobj.name, parent.type))
+            attach_node = lookup[parent]
         else:
-            # shoo!
-            attach_node = get_auto_root()[1]
+            attach_node = 0 # 0 should be __auto_root__ if dangling
+                            # perhaps a good idea to assert here?
 
         if bobj.users_group:
             if len(bobj.users_group) >= 2:
@@ -188,7 +182,7 @@ def save(operator, context, filepath,
 
             lod_name = bobj.users_group[0].name
         else:
-            lod_name = "detail32"
+            lod_name = "detail32" # setting?
 
         if lod_name not in scene_lods:
             match = re_lod_size.search(lod_name)
@@ -197,7 +191,7 @@ def save(operator, context, filepath,
                 lod_size = int(match.group(1))
             else:
                 print("Warning: LOD {} does not end with a size, assuming size 32".format(lod_name))
-                lod_size = 32
+                lod_size = 32 # setting?
 
             if lod_size >= 0 and (shape.smallest_detail_level == None or lod_size < shape.smallest_detail_level):
                 shape.smallest_detail_level = lod_size
@@ -236,16 +230,13 @@ def save(operator, context, filepath,
     for object, lods in scene_objects.values():
         print(shape.names[object.name])
         object.firstMesh = len(shape.meshes)
-        print("firstMesh =", object.firstMesh)
 
         for i, lod in enumerate(reversed(shape.detail_levels)):
             if shape.names[lod.name] in lods:
                 object.numMeshes = len(shape.detail_levels) - i
-                print("numMeshes =", object.numMeshes)
                 break
         else:
             object.numMeshes = 0
-            print("numMeshes = 0")
             continue
 
         for i in range(object.numMeshes):
@@ -266,7 +257,6 @@ def save(operator, context, filepath,
                     bpy.ops.object.modifier_add(type="EDGE_SPLIT")
                     bobj.modifiers[-1].split_angle = 0
 
-                print("  bmesh triangulation")
                 mesh = bobj.to_mesh(scene, force_flatshade, "PREVIEW")
                 bm = bmesh.new()
                 bm.from_mesh(mesh)
@@ -394,7 +384,10 @@ def save(operator, context, filepath,
         (shape.bounds.min.z + shape.bounds.max.z) / 2)
 
     if debug_report:
+        print("Writing debug report")
         write_debug_report(filepath + ".txt", shape)
+    
+    shape.verify()
 
     with open(filepath, "wb") as fd:
         shape.save(fd)

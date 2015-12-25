@@ -225,10 +225,17 @@ class DtsShape(object):
 
 		return trans, rot
 
+	def verify(self):
+		assert self.detail_levels
+		assert self.subshapes
+		assert len(self.nodes) == len(self.default_translations)
+		assert len(self.nodes) == len(self.default_rotations)
+		assert len(self.objects) == len(self.objectstates)
+		assert len(self.node_scales_arbitrary) == len(self.node_scalerots_arbitrary)
+		assert len(self.ground_translations) == len(self.ground_rotations)
+
 	def save(self, fd, dtsVersion=24):
 		stream = DtsOutputStream(dtsVersion)
-
-		assert len(self.node_scales_arbitrary) == len(self.node_scalerots_arbitrary)
 
 		# Header
 		stream.write32(

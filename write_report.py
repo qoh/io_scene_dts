@@ -22,65 +22,21 @@ def write_debug_report(filepath, shape):
         p("center = " + str(shape.center))
         p("bounds = " + str(shape.bounds))
         # p("Decals (deprecated): " + str(len(shape.decals)))
-        # p("IFL materials: " + str(len(shape.iflmaterials)))
-        # p("Materials: " + str(len(shape.materials)))
         p("Ground frames: " + str(len(shape.ground_translations)))
         # p("Decal states (deprecated): " + str(len(shape.decalstates)))
         p("Triggers: " + str(len(shape.triggers)))
         p("Sequences: " + str(len(shape.sequences)))
 
-        p("Default translations:")
-        for each in shape.default_translations:
-            p("  " + str(each))
-        for each in shape.default_rotations:
-            p("  " + str(each))
-
-        p("Node scales uniform:")
-        p(", ".join(map(str, shape.node_scales_uniform)))
-        p("Node scales aligned:")
-        p(", ".join(map(str, shape.node_scales_aligned)))
-        p("Node scales arbitrary:")
-        p(", ".join(map(str, shape.node_scales_arbitrary)))
-        p("Node scalerots arbitrary:")
-        p(", ".join(map(str, shape.node_scalerots_arbitrary)))
-
-        p("Object states (" + str(len(shape.objectstates)) + "):")
-        for i, state in enumerate(shape.objectstates):
-            p("  " + str(i))
-            p("    vis = " + str(state.vis))
-            p("    frame = " + str(state.frame))
-            p("    matFrame = " + str(state.matFrame))
-
-        p("IFL materials (" + str(len(shape.iflmaterials)) + "):")
-        for ifl in shape.iflmaterials:
-            p("  IflMat " + gn(ifl.name))
-            p("    slot = " + str(ifl.slot))
-            p("    firstFrame = " + str(ifl.firstFrame))
-            p("    numFrames = " + str(ifl.numFrames))
-            p("    time = " + str(ifl.time))
-
-        p("Materials (" + str(len(shape.materials)) + "):")
-        for i, mat in enumerate(shape.materials):
-            p("  " + str(i) + " " + mat.name)
-            flagNames = ("SWrap", "TWrap", "Translucent", "Additive", "Subtractive", "SelfIlluminating", "NeverEnvMap", "NoMipMap", "MipMapZeroBorder", "IFLMaterial", "IFLFrame", "DetailMap", "BumpMap", "ReflectanceMap", "AuxiliaryMask")
-            flags = ""
-            for name in flagNames:
-                if mat.flags & getattr(Material, name):
-                    flags += " " + name
-            p("    flags = " + str(mat.flags) + flags)
-            p("    reflectanceMap = " + str(mat.reflectanceMap))
-            p("    reflectance = " + str(mat.reflectance))
-            p("    bumpMap = " + str(mat.bumpMap))
-            p("    detailMap = " + str(mat.detailMap))
-            p("    detailScale = " + str(mat.detailScale))
+        p("Node scales uniform: " + str(len(shape.node_scales_uniform)))
+        p("Node scales aligned: " + str(len(shape.node_scales_aligned)))
+        p("Node scales arbitrary: " + str(len(shape.node_scales_arbitrary)))
+        p("Node scalerots arbitrary: " + str(len(shape.node_scalerots_arbitrary)))
 
         p("Detail levels (" + str(len(shape.detail_levels)) + "):")
         for i, lod in enumerate(shape.detail_levels):
-            p("  LOD " + str(i) + " " + gn(lod.name))
-            # p("    name = " + gn(lod.name))
+            p("  LOD " + str(i) + " " + gn(lod.name) + " (size " + str(lod.size) + ")")
             p("    subshape = " + str(lod.subshape))
             p("    objectDetail = " + str(lod.objectDetail))
-            p("    size = " + str(lod.size))
             p("    polyCount = " + str(lod.polyCount))
             # p("    avgError (unused) = " + str(lod.avgError))
             # p("    maxError (unused) = " + str(lod.maxError))
@@ -106,30 +62,48 @@ def write_debug_report(filepath, shape):
                 p("  " + str(i) + " " + gn(node.name))
             else:
                 p("  " + str(i) + " " + gn(node.name) + "  ->  " + str(node.parent) + " " + gn(shape.nodes[node.parent].name))
-            # p("  Node " + str(i))
-            # p("    name = " + gn(node.name))
-            # if node.parent == -1:
-            #     p("    parent = -1 (NONE)")
-            # else:
-            #     p("    parent = " + str(node.parent) + " (" + gn(shape.nodes[node.parent].name) + ")")
-            # p("    firstObject (deprecated) = " + str(node.firstObject))
-            # p("    child (deprecated) = " + str(node.child))
-            # p("    sibling (deprecated) = " + str(node.sibling))
+            if i < len(shape.default_translations):
+                p("    translation = " + str(shape.default_translations[i]))
+            else:
+                p("    translation = MISSING!")
+            if i < len(shape.default_rotations):
+                p("    rotation = " + str(shape.default_rotations[i]))
+            else:
+                p("    rotation = MISSING!")
 
+        # TODO: tell if default transform lists are longer than node list
+
+        p("Object states: " + str(len(shape.objectstates)))
         p("Objects (" + str(len(shape.objects)) + "):")
         for i, obj in enumerate(shape.objects):
-            p("  " + str(i) + " " + gn(obj.name))
-            # p("    name = " + gn(obj.name))
-            # p("    numMeshes = " + str(obj.numMeshes))
-            # p("    firstMesh = " + str(obj.firstMesh))
+            s = "  " + str(i) + " " + gn(obj.name)
             if obj.node == -1:
-                p("    node = -1 (none)")
+                s += " NOT ATTACHED!"
             else:
-                p("    node = " + str(obj.node) + " (" + gn(shape.nodes[obj.node].name) + ")")
-            # p("    sibling (deprecated) = " + str(obj.sibling))
-            # p("    firstDecal (deprecated) = " + str(obj.firstDecal))
-            # p("      meshes = " + ln(shape.meshes, obj.firstMesh, obj.numMeshes))
-            p("    meshes = " + ln(shape.meshes, obj.firstMesh, obj.numMeshes))
+                s += " in " + str(obj.node) + " (" + gn(shape.nodes[obj.node].name) + ")"
+            s += ", meshes = " + ln(shape.meshes, obj.firstMesh, obj.numMeshes)
+            p(s)
+
+        p("Materials (" + str(len(shape.materials)) + "):")
+        for i, mat in enumerate(shape.materials):
+            flagNames = ("SWrap", "TWrap", "Translucent", "Additive", "Subtractive", "SelfIlluminating", "NeverEnvMap", "NoMipMap", "MipMapZeroBorder", "IFLMaterial", "IFLFrame", "DetailMap", "BumpMap", "ReflectanceMap", "AuxiliaryMask")
+            flags = ""
+            for name in flagNames:
+                if mat.flags & getattr(Material, name):
+                    flags += " " + name
+            p("  " + str(i) + " " + mat.name + " (" + str(mat.flags) + flags + ")")
+            p("    bumpMap = " + str(mat.bumpMap) + ", reflectanceMap = " + str(mat.reflectanceMap) + ", detailMap = " + str(mat.detailMap))
+            p("    reflectance = " + str(mat.reflectance) + ", detailScale = " + str(mat.detailScale))
+
+        p("IFL materials (" + str(len(shape.iflmaterials)) + "):")
+        for ifl in shape.iflmaterials:
+            p("  IflMat " + gn(ifl.name))
+            if ifl.slot in shape.materials:
+                mat_name = gn(shape.materials[ifl.slot].name)
+            else:
+                mat_name = "<MISSING>"
+            p("    slot = " + str(ifl.slot) + " " + mat_name + ", time = " + str(ifl.time))
+            p("    firstFrame = " + str(ifl.firstFrame) + ", numFrames = " + str(ifl.numFrames))
 
         p("Meshes (" + str(len(shape.meshes)) + "):")
         for i, mesh in enumerate(shape.meshes):
@@ -141,10 +115,10 @@ def write_debug_report(filepath, shape):
             p("    numFrames = " + str(mesh.numFrames))
             p("    matFrames = " + str(mesh.matFrames))
             p("    vertsPerFrame = " + str(mesh.vertsPerFrame))
-            p("    parent (unused?) = " + str(mesh.parent))
+            # p("    parent (unused?) = " + str(mesh.parent))
             p("    flags = " + str(mesh.flags))
-            p("    indices = " + ",".join(map(str, mesh.indices)))
-            p("    mindices = " + ",".join(map(str, mesh.mindices)))
+            # p("    indices = " + ",".join(map(str, mesh.indices)))
+            # p("    mindices = " + ",".join(map(str, mesh.mindices)))
             p("    + Primitives (" + str(len(mesh.primitives)) + "):")
             for prim in mesh.primitives:
                 flags = ""
@@ -163,16 +137,12 @@ def write_debug_report(filepath, shape):
                 mat = prim.type & Primitive.MaterialMask
                 flags += " MaterialMask:" + str(mat)
                 p("      " + str(prim.firstElement) + "->" + str(prim.firstElement + prim.numElements - 1) + " " + str(prim.type) + flags)
-            p("    + Vertices (" + str(len(mesh.verts)) + "):")
-            for i in range(len(mesh.verts)):
-                p("      vert" + str(i) + " " + str(mesh.verts[i]) + " normal " + str(mesh.normals[i]) + " encoded " + str(mesh.enormals[i]))
-            p("    + Texture coords (" + str(len(mesh.tverts)) + "):")
-            for i in range(len(mesh.tverts)):
-                p("      tvert" + str(i) + " " + str(mesh.tverts[i]))
-
-        p("Names (" + str(len(shape.names)) + "):")
-        for i, name in enumerate(shape.names):
-            p("  " + str(i) + " = " + name)
+            p("    + Vertices (" + str(len(mesh.verts)) + "): <omitted>")
+            # for i in range(len(mesh.verts)):
+            #     p("      vert" + str(i) + " " + str(mesh.verts[i]) + " normal " + str(mesh.normals[i]) + " encoded " + str(mesh.enormals[i]))
+            p("    + Texture coords (" + str(len(mesh.tverts)) + "): <omitted>")
+            # for i in range(len(mesh.tverts)):
+            #     p("      tvert" + str(i) + " " + str(mesh.tverts[i]))
 
         p("Sequences (" + str(len(shape.sequences)) + "):")
         for i, seq in enumerate(shape.sequences):
@@ -199,3 +169,7 @@ def write_debug_report(filepath, shape):
             p("    visMatters: " + str(seq.visMatters))
             p("    frameMatters: " + str(seq.frameMatters))
             p("    matFrameMatters: " + str(seq.matFrameMatters))
+
+        p("Names (" + str(len(shape.names)) + "):")
+        for i, name in enumerate(shape.names):
+            p("  " + str(i) + " = " + name)
