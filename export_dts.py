@@ -250,7 +250,7 @@ def save(operator, context, filepath,
                 #########################
                 ### Welcome to complexity
 
-                mesh = bobj.to_mesh(scene, force_flatshade, "PREVIEW")
+                mesh = bobj.to_mesh(scene, False, "PREVIEW")
                 bm = bmesh.new()
                 bm.from_mesh(mesh)
                 bmesh.ops.triangulate(bm, faces=bm.faces)
@@ -336,8 +336,6 @@ def save(operator, context, filepath,
                                     dmesh.tverts.append(Point2D(uv.x, 1 - uv.y))
                                 else:
                                     dmesh.tverts.append(Point2D(0, 0))
-
-                            print(len(dmesh.verts))
                         else:
                             vertices = poly.vertices
 
