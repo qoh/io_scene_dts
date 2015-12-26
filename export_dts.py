@@ -103,37 +103,30 @@ def explore_armatures(lookup, shape, obs, parent=-1):
 
 def save(operator, context, filepath,
          blank_material=True,
-         force_flatshade=True,
-         force_opaque=False,
          debug_report=True):
+    blank_material_index = None
+
     scene = context.scene
     shape = DtsShape()
 
-    poly_count = 0
     smin = [10e30, 10e30, 10e30]
     smax = [-10e30, -10e30, -10e30]
 
-    material_lookup = {}
-    blank_material_index = None
-
     print("Exporting scene to DTS")
 
-    armature_nodes = {}
     scene_lods = {}
     scene_objects = {}
-    pending_attachments = {}
 
     shape.smallest_detail_level = None
 
     scene_meshes = filter(lambda bobj: bobj.type == "MESH", scene.objects)
     scene_armatures = filter(lambda bobj: bobj.type == "ARMATURE", scene.objects)
 
-    lookup = {}
-
     root_scene = tuple(filter(lambda ob: not ob.parent, scene.objects))
 
     # Create a DTS node for every armature in the scene
-    explore_armatures(lookup, shape, root_scene)
+    node_lookup = {}
+    explore_armatures(node_lookup, shape, root_scene)
 
     root_nodes = tuple(filter(lambda n: n.parent == -1, shape.nodes))
     root_objects = tuple(filter(lambda n: get_parent_armature(n) is None, get_deep_children("MESH", root_scene)))
@@ -170,7 +163,7 @@ def save(operator, context, filepath,
         shape.default_translations.append(node.translation)
         shape.default_rotations.append(node.rotation)
 
-    lookup = {ob: node_indices[node] for ob, node in lookup.items()}
+    node_lookup = {ob: node_indices[node] for ob, node in node_lookup.items()}
 
     # Now that we have all the nodes, attach our fabled objects to them
     for bobj in scene_meshes:
@@ -179,7 +172,7 @@ def save(operator, context, filepath,
         # parent = bobj.parent
 
         if parent:
-            attach_node = lookup[parent]
+            attach_node = node_lookup[parent]
         else:
             attach_node = 0 # 0 should be __auto_root__ if dangling
                             # perhaps a good idea to assert here?
@@ -257,23 +250,12 @@ def save(operator, context, filepath,
                 #########################
                 ### Welcome to complexity
 
-                if force_flatshade:
-                    print("  edge split")
-                    # Hack in flatshading
-                    scene.objects.active = bobj
-                    bpy.ops.object.modifier_add(type="EDGE_SPLIT")
-                    bobj.modifiers[-1].split_angle = 0
-
                 mesh = bobj.to_mesh(scene, force_flatshade, "PREVIEW")
                 bm = bmesh.new()
                 bm.from_mesh(mesh)
                 bmesh.ops.triangulate(bm, faces=bm.faces)
                 bm.to_mesh(mesh)
                 bm.free()
-
-                if force_flatshade:
-                    # Clean up our hack
-                    bpy.ops.object.modifier_remove(modifier=bobj.modifiers[-1].name)
 
                 dmesh = Mesh()
                 shape.meshes.append(dmesh)
@@ -309,8 +291,13 @@ def save(operator, context, filepath,
                             material_table[bmat] = export_material(bmat, shape)
 
                         flags |= material_table[bmat] & Primitive.MaterialMask
+                    elif blank_material:
+                        if blank_material_index is None:
+                            blank_material_index = len(shape.materials)
+                            shape.materials.append(create_blank_material())
+
+                        flags |= blank_material_index & Primitive.MaterialMask
                     else:
-                        # TODO: re-add blank materials
                         flags |= Primitive.NoMaterial
 
                     lod.polyCount += len(polys)
@@ -319,25 +306,57 @@ def save(operator, context, filepath,
 
                     for poly in polys:
                         if mesh.uv_layers:
-                            data = mesh.uv_layers[0].data
+                            uv_layer = mesh.uv_layers[0].data
+                        else:
+                            uv_layer = None
+
+                        needs_split = False
+                        use_face_normal = not poly.use_smooth
+
+                        # TODO: add UVs to needs_split consideration
+                        if not poly.use_smooth:
+                            for vert_index in poly.vertices:
+                                if mesh.vertices[vert_index].normal != poly.normal:
+                                    needs_split = True
+                                    break
+
+                        if needs_split: # TODO: verify that this works properly
+                            vertices = tuple(range(len(dmesh.verts), len(dmesh.verts) + len(poly.vertices)))
 
                             for vert_index, loop_index in zip(poly.vertices, poly.loop_indices):
-                                # if vert_index in got_tvert:
-                                #     print("Warning: Multiple tverts for", vert_index)
+                                vert = mesh.vertices[vert_index]
+                                dmesh.verts.append(Point(*vert.co))
+                                if use_face_normal:
+                                    dmesh.normals.append(Point(*poly.normal))
+                                else:
+                                    dmesh.normals.append(Point(*vert.normal))
+                                dmesh.enormals.append(0)
+                                if uv_layer:
+                                    uv = uv_layer[loop_index].uv
+                                    dmesh.tverts.append(Point2D(uv.x, 1 - uv.y))
+                                else:
+                                    dmesh.tverts.append(Point2D(0, 0))
 
-                                uv = data[loop_index].uv
-                                dmesh.tverts[vert_index] = Point2D(uv.x, 1 - uv.y)
-                                # got_tvert.add(vert_index)
+                            print(len(dmesh.verts))
+                        else:
+                            vertices = poly.vertices
 
-                        dmesh.indices.append(poly.vertices[2])
-                        dmesh.indices.append(poly.vertices[1])
-                        dmesh.indices.append(poly.vertices[0])
+                            if uv_layer:
+                                for vert_index, loop_index in zip(vertices, poly.loop_indices):
+                                    # TODO: split on multiple UV coords
+                                    uv = uv_layer[loop_index].uv
+                                    dmesh.tverts[vert_index] = Point2D(uv.x, 1 - uv.y)
+
+                        dmesh.indices.append(vertices[2])
+                        dmesh.indices.append(vertices[1])
+                        dmesh.indices.append(vertices[0])
 
                     numElements = len(dmesh.indices) - firstElement
                     dmesh.primitives.append(Primitive(firstElement, numElements, flags))
 
                 bpy.data.meshes.remove(mesh)
 
+                # ??? ? ?? ???? ??? ?
                 dmesh.vertsPerFrame = len(dmesh.verts)
 
                 ### Nobody leaves Hotel California

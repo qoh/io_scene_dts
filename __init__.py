@@ -83,12 +83,6 @@ class ExportDTS(bpy.types.Operator, ExportHelper):
             default=True,
             )
 
-    force_flatshade = BoolProperty(
-            name="Force Flatshading",
-            description="Apply Edge Split to all meshes pre-export (this is a bad setting)",
-            default=True,
-            )
-
     debug_report = BoolProperty(
         name="Write debug report",
         description="Dump out all the information from the DTS to a file",
