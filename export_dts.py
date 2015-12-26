@@ -20,6 +20,8 @@ def create_blank_material():
     return Material(name="blank", flags=Material.SWrap | Material.TWrap | Material.NeverEnvMap, reflectanceMap=0)
 
 def export_material(mat, shape):
+    print("Exporting material", mat.name)
+
     material_index = len(shape.materials)
     flags = 0
 
@@ -77,17 +79,21 @@ def get_deep_children(search, obs):
 def explore_armatures(lookup, shape, obs, parent=-1):
     for ob in obs:
         if ob.type == "ARMATURE":
-            shape.default_translations.append(Point(*ob.location))
+            print("Exporting armature", ob.name)
+
+            node = Node(shape.name(ob.name), parent)
+            node.translation = Point(*ob.location)
+
             # Try to find a quaternion representation of the armature rotation
             # TODO: Handle more than quaternion & euler
             if ob.rotation_mode == "QUATERNION":
                 rot = ob.rotation_quaternion
             else:
                 rot = ob.rotation_euler.to_quaternion()
-                # Weird representation difference -wxyz -> xyzw
-                shape.default_rotations.append(Quaternion(rot[1], rot[2], rot[3], -rot[0]))
 
-            node = Node(shape.name(ob.name), parent)
+            # Weird representation difference -wxyz -> xyzw
+            node.rotation = Quaternion(rot[1], rot[2], rot[3], -rot[0])
+
             shape.nodes.append(node)
             lookup[ob] = next_parent = node
         else:
@@ -130,7 +136,7 @@ def save(operator, context, filepath,
     explore_armatures(lookup, shape, root_scene)
 
     root_nodes = tuple(filter(lambda n: n.parent == -1, shape.nodes))
-    root_objects = tuple(get_deep_children("MESH", root_scene))
+    root_objects = tuple(filter(lambda n: get_parent_armature(n) is None, get_deep_children("MESH", root_scene)))
 
     print("# of root nodes", len(root_nodes))
     print("# of root objects", len(root_objects))
@@ -143,9 +149,9 @@ def save(operator, context, filepath,
             return fail(operator, "Auto root with specified NodeOrder")
 
         auto_root = Node(shape.name("__auto_root__"))
+        auto_root.translation = Point()
+        auto_root.rotation = Quaternion()
         shape.nodes.insert(0, auto_root)
-        shape.default_translations.append(Point())
-        shape.default_rotations.append(Quaternion())
 
         for dangling_node in root_nodes:
             dangling_node.parent = auto_root
@@ -161,6 +167,8 @@ def save(operator, context, filepath,
         if not isinstance(node.parent, int):
             node.parent = shape.nodes.index(node.parent)
         node_indices[node] = index
+        shape.default_translations.append(node.translation)
+        shape.default_rotations.append(node.rotation)
 
     lookup = {ob: node_indices[node] for ob, node in lookup.items()}
 
@@ -217,18 +225,14 @@ def save(operator, context, filepath,
     # Try to sort the detail levels? Maybe that fixes things?
     shape.detail_levels.sort(key=attrgetter("size"), reverse=True)
 
-    print("Detail levels:")
-
     for i, lod in enumerate(shape.detail_levels):
         lod.objectDetail = i # this isn't the right place for this
-        print(i, shape.names[lod.name])
 
     print("Adding meshes to objects...")
 
     material_table = {}
 
     for object, lods in scene_objects.values():
-        print(shape.names[object.name])
         object.firstMesh = len(shape.meshes)
 
         for i, lod in enumerate(reversed(shape.detail_levels)):
@@ -239,12 +243,15 @@ def save(operator, context, filepath,
             object.numMeshes = 0
             continue
 
+        if object.numMeshes == 0:
+            print("Nothing to be done for object {}".format(shape.names[object.name]))
+
         for i in range(object.numMeshes):
             lod = shape.detail_levels[i]
             lod_name = shape.names[lod.name]
 
             if lod_name in lods:
-                print("Generating mesh for object {} in LOD {}".format(shape.names[object.name], lod_name))
+                print("Adding mesh for object {} in LOD {}".format(shape.names[object.name], lod_name))
                 bobj = lods[lod_name]
 
                 #########################
@@ -386,7 +393,7 @@ def save(operator, context, filepath,
     if debug_report:
         print("Writing debug report")
         write_debug_report(filepath + ".txt", shape)
-    
+
     shape.verify()
 
     with open(filepath, "wb") as fd:

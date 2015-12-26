@@ -76,10 +76,10 @@ class Quaternion(object):
 			-self.x*other.x -self.y*other.y -self.z*other.z +self.w*other.w)
 
 	def __repr__(self):
-		x = math.floor(self.x / 10000 + 0.5) * 10000
-		y = math.floor(self.y / 10000 + 0.5) * 10000
-		z = math.floor(self.z / 10000 + 0.5) * 10000
-		w = math.floor(self.w / 10000 + 0.5) * 10000
+		x = math.floor(self.x * 10000 + 0.5) / 10000
+		y = math.floor(self.y * 10000 + 0.5) / 10000
+		z = math.floor(self.z * 10000 + 0.5) / 10000
+		w = math.floor(self.w * 10000 + 0.5) / 10000
 		return "({}, {}, {}, {})".format(x, y, z, w)
 
 	def apply(self, v):
