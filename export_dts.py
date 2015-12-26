@@ -1,4 +1,5 @@
 import bpy, bmesh
+from mathutils import Vector
 from math import sqrt
 from operator import attrgetter
 from itertools import groupby
@@ -10,6 +11,8 @@ from .write_report import write_debug_report
 import re
 # re really isn't necessary. oh well.
 re_lod_size = re.compile(r"(-?\d+)$")
+common_col_name = re.compile(r"^(LOS)?[cC]ol-?\d+$")
+default_bone_name = re.compile(r"^Bone(\.\d+)?$")
 
 def fail(operator, message):
     print("Error:", message)
@@ -20,19 +23,29 @@ def create_blank_material():
     return Material(name="blank", flags=Material.SWrap | Material.TWrap | Material.NeverEnvMap, reflectanceMap=0)
 
 def export_material(mat, shape):
-    print("Exporting material", mat.name)
+    # print("Exporting material", mat.name)
 
     material_index = len(shape.materials)
     flags = 0
 
-    if mat.use_transparency:
-        flags |= Material.Translucent
     if mat.use_shadeless:
         flags |= Material.SelfIlluminating
-    if mat.get("additive"):
+    if mat.use_transparency:
+        flags |= Material.Translucent
+        default_mode = "additive"
+    else:
+        default_mode = "none"
+
+    mode = mat.get("blendMode", default_mode)
+    if mode == "additive":
         flags |= Material.Additive
-    if mat.get("subtractive"):
+    elif mode == "subtractive":
         flags |= Material.Subtractive
+    elif mode == "both":
+        flags |= Material.Additive | Material.Subtractive
+    elif mode != "none":
+        print("Warning: Invalid blendMode '{}' on material '{}'".format(mode, mat.name))
+
     if not mat.get("noSWrap"):
         flags |= Material.SWrap
     if not mat.get("noTWrap"):
@@ -76,18 +89,29 @@ def get_deep_children(search, obs):
         else:
             yield from get_deep_children(search, ob.children)
 
+def explore_bones_because_teneksi(shape, bones, parent):
+    for bone in bones:
+        node = Node(shape.name(bone.name), parent)
+        node.translation = Point(*bone.head)
+        node.rotation = Quaternion()
+        shape.nodes.append(node)
+
 def explore_armatures(lookup, shape, obs, parent=-1):
     for ob in obs:
         if ob.type == "ARMATURE":
-            print("Exporting armature", ob.name)
+            # print("Exporting armature", ob.name)
+            if ob.scale != Vector((1,1,1)):
+                print("Warning: Armature '{}' has scale that cannot export to DTS".format(ob.name))
 
             node = Node(shape.name(ob.name), parent)
             node.translation = Point(*ob.location)
 
             # Try to find a quaternion representation of the armature rotation
-            # TODO: Handle more than quaternion & euler
             if ob.rotation_mode == "QUATERNION":
                 rot = ob.rotation_quaternion
+            elif ob.rotation_mode == "AXIS_ANGLE":
+                print("Warning: Armature '{}' axis angle rotation".format(ob.name))
+                rot = ob.rotation_quaternion # ob.rotation_axis_angle
             else:
                 rot = ob.rotation_euler.to_quaternion()
 
@@ -96,6 +120,11 @@ def explore_armatures(lookup, shape, obs, parent=-1):
 
             shape.nodes.append(node)
             lookup[ob] = next_parent = node
+
+            bones = ob.data.bones
+            if len(bones) != 0 and (len(bones) != 1 or not default_bone_name.match(bones[0].name)):
+                print("Warning: Exporting bones in armature '{}' as nodes. Use child armatures instead.".format(ob.name))
+                explore_bones_because_teneksi(shape, bones, next_parent)
         else:
             next_parent = parent
 
@@ -117,8 +146,6 @@ def save(operator, context, filepath,
     scene_lods = {}
     scene_objects = {}
 
-    shape.smallest_detail_level = None
-
     scene_meshes = filter(lambda bobj: bobj.type == "MESH", scene.objects)
     scene_armatures = filter(lambda bobj: bobj.type == "ARMATURE", scene.objects)
 
@@ -131,12 +158,9 @@ def save(operator, context, filepath,
     root_nodes = tuple(filter(lambda n: n.parent == -1, shape.nodes))
     root_objects = tuple(filter(lambda n: get_parent_armature(n) is None, get_deep_children("MESH", root_scene)))
 
-    print("# of root nodes", len(root_nodes))
-    print("# of root objects", len(root_objects))
-
     # Figure out if we should create our own root node
     if len(root_nodes) > 1 or root_objects:
-        print("Auto root is needed")
+        print("Warning: Multiple root nodes/root objects, adding fake root")
 
         if "NodeOrder" in bpy.data.texts:
             return fail(operator, "Auto root with specified NodeOrder")
@@ -167,6 +191,22 @@ def save(operator, context, filepath,
 
     # Now that we have all the nodes, attach our fabled objects to them
     for bobj in scene_meshes:
+        if bobj.users_group:
+            if len(bobj.users_group) >= 2:
+                print("Warning: Mesh {} is in multiple groups".format(bobj.name))
+
+            lod_name = bobj.users_group[0].name
+        elif common_col_name.match(bobj.name):
+            lod_name = "collision-1"
+        else:
+            lod_name = "detail32"
+
+        if lod_name == "__ignore__":
+            continue
+
+        if bobj.location != Vector((0,0,0)) or bobj.scale != Vector((1,1,1)): # TODO: rotation
+            print("Warning: Object '{}' has transform that cannot export to DTS".format(bobj.name))
+
         # TODO: do something about the mesh translation/rotation as well
         parent = get_parent_armature(bobj)
         # parent = bobj.parent
@@ -177,14 +217,6 @@ def save(operator, context, filepath,
             attach_node = 0 # 0 should be __auto_root__ if dangling
                             # perhaps a good idea to assert here?
 
-        if bobj.users_group:
-            if len(bobj.users_group) >= 2:
-                print("Warning: Mesh {} is in multiple groups".format(bobj.name))
-
-            lod_name = bobj.users_group[0].name
-        else:
-            lod_name = "detail32" # setting?
-
         if lod_name not in scene_lods:
             match = re_lod_size.search(lod_name)
 
@@ -194,10 +226,7 @@ def save(operator, context, filepath,
                 print("Warning: LOD {} does not end with a size, assuming size 32".format(lod_name))
                 lod_size = 32 # setting?
 
-            if lod_size >= 0 and (shape.smallest_detail_level == None or lod_size < shape.smallest_detail_level):
-                shape.smallest_detail_level = lod_size
-
-            print("Creating LOD {} with size {}".format(lod_name, lod_size))
+            print("Creating LOD '{}' (size {})".format(lod_name, lod_size))
             scene_lods[lod_name] = DetailLevel(name=shape.name(lod_name), subshape=0, objectDetail=-1, size=lod_size, polyCount=0)
             shape.detail_levels.append(scene_lods[lod_name])
 
@@ -236,15 +265,15 @@ def save(operator, context, filepath,
             object.numMeshes = 0
             continue
 
-        if object.numMeshes == 0:
-            print("Nothing to be done for object {}".format(shape.names[object.name]))
+        # if object.numMeshes == 0:
+        #     print("Nothing to be done for object {}".format(shape.names[object.name]))
 
         for i in range(object.numMeshes):
             lod = shape.detail_levels[i]
             lod_name = shape.names[lod.name]
 
             if lod_name in lods:
-                print("Adding mesh for object {} in LOD {}".format(shape.names[object.name], lod_name))
+                print("Exporting mesh '{}' (LOD '{}')".format(shape.names[object.name], lod_name))
                 bobj = lods[lod_name]
 
                 #########################
@@ -359,7 +388,7 @@ def save(operator, context, filepath,
 
                 ### Nobody leaves Hotel California
             else:
-                print("Adding Null mesh for object {} in LOD {}".format(shape.names[object.name], lod_name))
+                # print("Adding Null mesh for object {} in LOD {}".format(shape.names[object.name], lod_name))
                 shape.meshes.append(Mesh(MeshType.Null))
 
     print("Creating subshape with " + str(len(shape.nodes)) + " nodes and " + str(len(shape.objects)) + " objects")
@@ -368,10 +397,10 @@ def save(operator, context, filepath,
     # Figure out all the things
     print("Computing bounds")
     shape.smallest_size = None
-    shape.smallest_detail_level = None
+    shape.smallest_detail_level = -1
 
     for i, lod in enumerate(shape.detail_levels):
-        if shape.smallest_size == None or (lod.size >= 0 and lod.size < shape.smallest_size):
+        if lod.size >= 0 and (shape.smallest_size == None or lod.size < shape.smallest_size):
             shape.smallest_size = lod.size
             shape.smallest_detail_level = i
 
@@ -402,10 +431,12 @@ def save(operator, context, filepath,
             shape.bounds.max.y = max(shape.bounds.max.y, bounds.max.y)
             shape.bounds.max.z = max(shape.bounds.max.z, bounds.max.z)
 
-    shape.center = Point(
-        (shape.bounds.min.x + shape.bounds.max.x) / 2,
-        (shape.bounds.min.y + shape.bounds.max.y) / 2,
-        (shape.bounds.min.z + shape.bounds.max.z) / 2)
+    # shape.center = Point(
+    #     (shape.bounds.min.x + shape.bounds.max.x) / 2,
+    #     (shape.bounds.min.y + shape.bounds.max.y) / 2,
+    #     (shape.bounds.min.z + shape.bounds.max.z) / 2)
+
+    shape.center = Point()
 
     if debug_report:
         print("Writing debug report")

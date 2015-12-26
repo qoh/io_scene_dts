@@ -257,7 +257,7 @@ class DtsShape(object):
 			len(self.meshes),
 			len(self.names),
 		)
-		stream.write32(int(self.smallest_size))
+		stream.write_float(self.smallest_size)
 		stream.write32(self.smallest_detail_level)
 
 		if dtsVersion > 24:

@@ -74,14 +74,20 @@ def import_material(dmat, filepath):
     else: # give it a random color
         bmat.diffuse_color = (random(), random(), random())
 
-    if dmat.flags & Material.Translucent:
-        bmat.use_transparency = True
     if dmat.flags & Material.SelfIlluminating:
         bmat.use_shadeless = True
-    if dmat.flags & Material.Additive:
-        bmat["additive"] = True
-    if dmat.flags & Material.Subtractive:
-        bmat["subtractive"] = True
+    if dmat.flags & Material.Translucent:
+        bmat.use_transparency = True
+
+    if dmat.flags & (Material.Additive | Material.Subtractive):
+        bmat["blendMode"] = "both"
+    elif dmat.flags & Material.Additive:
+        bmat["blendMode"] = "additive"
+    elif dmat.flags & Material.Subtractive:
+        bmat["blendMode"] = "subtractive"
+    elif dmat.flags & Material.Translucent:
+        bmat["blendMode"] = "none"
+
     if not (dmat.flags & Material.SWrap):
         bmat["noSWrap"] = True
     if not (dmat.flags & Material.TWrap):
