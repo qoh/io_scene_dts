@@ -1,5 +1,6 @@
 import bpy
 import mathutils
+import os
 from bpy_extras.io_utils import unpack_list
 
 from .DtsShape import DtsShape
@@ -9,6 +10,7 @@ from .write_report import write_debug_report
 from random import random
 
 blockhead_nodes = ("HeadSkin", "chest", "Larm", "Lhand", "Rarm", "Rhand", "pants", "LShoe", "RShoe")
+texture_extensions = ("png", "jpg")
 
 default_materials = {
     "black": (0, 0, 0),
@@ -36,8 +38,37 @@ for name, color in default_materials.items():
 def import_material(dmat, filepath):
     bmat = bpy.data.materials.new(dmat.name)
 
-    if False:
-        pass # did we find a texture?
+    # Search through directories to find the material texture
+    dirname = os.path.dirname(filepath)
+    found_tex = False
+
+    while True:
+        texbase = os.path.join(dirname, dmat.name)
+
+        for extension in texture_extensions:
+            texname = texbase + "." + extension
+
+            if os.path.isfile(texname):
+                found_tex = True
+                break
+
+        if found_tex or os.path.ismount(dirname):
+            break
+
+        prevdir, dirname = dirname, os.path.dirname(dirname)
+
+        if prevdir == dirname:
+            break
+
+    if found_tex:
+        try:
+            teximg = bpy.data.images.load(texname)
+        except:
+            print("Cannot load image", texname)
+
+        texslot = bmat.texture_slots.add()
+        tex = texslot.texture = bpy.data.textures.new(dmat.name, "IMAGE")
+        tex.image = teximg
     elif dmat.name in default_materials:
         bmat.diffuse_color = default_materials[dmat.name]
     else: # give it a random color
