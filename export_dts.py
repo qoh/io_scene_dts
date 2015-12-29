@@ -161,7 +161,10 @@ def save(operator, context, filepath,
         order = bpy.data.texts["NodeOrder"].as_string().split("\n")
         order_key = {name: i for i, name in enumerate(order)}
 
-        shape.nodes = list(sorted(shape.nodes, key=lambda n: order_key[shape.names[n.name]]))
+        try:
+            shape.nodes = list(sorted(shape.nodes, key=lambda n: order_key[shape.names[n.name]]))
+        except KeyError as e:
+            return fail(operator, "Node '{}' is missing from 'NodeOrder'".format(e.args[0]))
 
     node_indices = {}
 
@@ -297,7 +300,7 @@ def save(operator, context, filepath,
                 # This is the danger zone
                 # Data from down here may not stay around!
 
-                dmesh = Mesh()
+                dmesh = Mesh(Mesh.StandardType)
                 shape.meshes.append(dmesh)
 
                 for vertex in mesh.vertices:
@@ -399,7 +402,7 @@ def save(operator, context, filepath,
                 ### Nobody leaves Hotel California
             else:
                 # print("Adding Null mesh for object {} in LOD {}".format(shape.names[object.name], lod_name))
-                shape.meshes.append(Mesh(MeshType.Null))
+                shape.meshes.append(Mesh(Mesh.NullType))
 
     print("Creating subshape with " + str(len(shape.nodes)) + " nodes and " + str(len(shape.objects)) + " objects")
     shape.subshapes.append(Subshape(firstNode=0, firstObject=0, firstDecal=0, numNodes=len(shape.nodes), numObjects=len(shape.objects), numDecals=0))
@@ -534,7 +537,7 @@ def save(operator, context, filepath,
         seq.firstGroundFrame = len(shape.ground_translations)
         seq.baseRotation = len(shape.node_rotations)
         seq.baseTranslation = len(shape.node_translations)
-        seq.baseScale = len(shape.node_scales_uniform)
+        seq.baseScale = len(shape.node_aligned_scales)
         seq.baseObjectState = len(shape.objectstates)
         seq.baseDecalState = len(shape.decalstates)
         seq.firstTrigger = len(shape.triggers)
@@ -601,7 +604,7 @@ def save(operator, context, filepath,
 
         for curves in seq_curves_scale:
             for frame in frame_indices:
-                shape.node_scales_aligned.append(Vector(evaluate_all(curves, frame)))
+                shape.node_aligned_scales.append(Vector(evaluate_all(curves, frame)))
 
     for name in sequence_missing:
         print("Warning: Sequence '{}' exists in flags file, but no markers were found".format(name))

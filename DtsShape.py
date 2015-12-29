@@ -174,11 +174,10 @@ class DtsShape(object):
 		self.default_translations = []
 		self.node_rotations = []
 		self.node_translations = []
-		self.node_scales_uniform = []
-		self.node_scales_aligned = []
-		self.node_scales_arbitrary = []
-		self.node_scalerots_uniform = []
-		self.node_scalerots_arbitrary = []
+		self.node_uniform_scales = []
+		self.node_aligned_scales = []
+		self.node_arbitrary_scale_factors = []
+		self.node_arbitrary_scale_rots = []
 		self.ground_translations = []
 		self.ground_rotations = []
 		self.objectstates = []
@@ -229,7 +228,7 @@ class DtsShape(object):
 		assert len(self.nodes) == len(self.default_translations)
 		assert len(self.nodes) == len(self.default_rotations)
 		assert len(self.objects) == len(self.objectstates)
-		assert len(self.node_scales_arbitrary) == len(self.node_scalerots_arbitrary)
+		assert len(self.node_arbitrary_scale_factors) == len(self.node_arbitrary_scale_rots)
 		assert len(self.ground_translations) == len(self.ground_rotations)
 
 	def save(self, fd, dtsVersion=24):
@@ -244,9 +243,9 @@ class DtsShape(object):
 			len(self.iflmaterials),
 			len(self.node_rotations),
 			len(self.node_translations),
-			len(self.node_scales_uniform),
-			len(self.node_scales_aligned),
-			len(self.node_scales_arbitrary),
+			len(self.node_uniform_scales),
+			len(self.node_aligned_scales),
+			len(self.node_arbitrary_scale_factors),
 			len(self.ground_translations),
 			len(self.objectstates),
 			len(self.decalstates),
@@ -322,14 +321,14 @@ class DtsShape(object):
 		stream.guard(8)
 
 		# Default scales
-		for point in self.node_scales_uniform:
+		for point in self.node_uniform_scales:
 			stream.write_float(point)
-		for point in self.node_scales_aligned:
+		for point in self.node_aligned_scales:
 			stream.write_vec3(point)
-		for point in self.node_scales_arbitrary:
+		for point in self.node_arbitrary_scale_factors:
 			stream.write_vec3(point)
 		# if dtsVersion >= 26:
-		for quat in self.node_scalerots_arbitrary:
+		for quat in self.node_arbitrary_scale_rots:
 			stream.write_quat(quat)
 		stream.guard(9)
 
@@ -365,10 +364,6 @@ class DtsShape(object):
 		for mesh in self.meshes:
 			mesh.write(stream)
 		stream.guard()
-
-		if dtsVersion > 24:
-			# Morphs
-			pass
 
 		# Names
 		for name in self.names:
@@ -510,16 +505,16 @@ class DtsShape(object):
 
 		# Default scales
 		if stream.dtsVersion > 21:
-			self.node_scales_uniform = [stream.read_float() for i in range(n_nodescaleuniform)]
-			self.node_scales_aligned = [stream.read_vec3() for i in range(n_nodescalealigned)]
-			self.node_scales_arbitrary = [stream.read_vec3() for i in range(n_nodescalearbitrary)]
-			self.node_scalerots_arbitrary = [stream.read_quat() for i in range(n_nodescalearbitrary)]
+			self.node_uniform_scales = [stream.read_float() for i in range(n_nodescaleuniform)]
+			self.node_aligned_scales = [stream.read_vec3() for i in range(n_nodescalealigned)]
+			self.node_arbitrary_scale_factors = [stream.read_vec3() for i in range(n_nodescalearbitrary)]
+			self.node_arbitrary_scale_rots = [stream.read_quat() for i in range(n_nodescalearbitrary)]
 			stream.guard()
 		else:
-			self.node_scales_uniform = [None] * n_nodescaleuniform
-			self.node_scales_aligned = [None] * n_nodescalealigned
-			self.node_scales_arbitrary = [None] * n_nodescalearbitrary
-			self.node_scalerots_arbitrary = [None] * n_nodescalearbitrary
+			self.node_uniform_scales = [None] * n_nodescaleuniform
+			self.node_aligned_scales = [None] * n_nodescalealigned
+			self.node_arbitrary_scale_factors = [None] * n_nodescalearbitrary
+			self.node_arbitrary_scale_rots = [None] * n_nodescalearbitrary
 		# ???
 		# print(stream.dtsVersion)
 		# print(stream.sequence)

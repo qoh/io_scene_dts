@@ -5,7 +5,10 @@ import mathutils
 from mathutils import Vector
 import math
 
-class Box(object):
+def bit(n):
+	return 1 << n
+
+class Box:
 	def __init__(self, min, max):
 		self.min = min
 		self.max = max
@@ -13,7 +16,7 @@ class Box(object):
 	def __repr__(self):
 		return "({}, {})".format(self.min, self.max)
 
-class Quaternion(object):
+class Quaternion:
 	def __init__(self, x=0, y=0, z=0, w=1):
 		self.x = x
 		self.y = y
@@ -66,7 +69,7 @@ class Quaternion(object):
 		#r3 = -ir0*s0 -ir1*s1 -ir2*s2 +ir3*s3
 		return Vector((r0, r1, r2))
 
-class Node(object):
+class Node:
 	def __init__(self, name, parent=-1):
 		self.name = name
 		self.parent = parent
@@ -89,7 +92,7 @@ class Node(object):
 		obj.nextSibling = stream.read32()
 		return obj
 
-class Object(object):
+class Object:
 	def __init__(self, name, numMeshes, firstMesh, node):
 		self.name = name
 		self.numMeshes = numMeshes
@@ -112,7 +115,7 @@ class Object(object):
 		obj.firstDecal = stream.read32()
 		return obj
 
-class IflMaterial(object):
+class IflMaterial:
 	def __init__(self, name, slot, firstFrame, time, numFrames):
 		self.name = name
 		self.slot = slot
@@ -131,7 +134,7 @@ class IflMaterial(object):
 			stream.read32(), stream.read32(),
 			stream.read32(), stream.read32(), stream.read32())
 
-class Subshape(object):
+class Subshape:
 	def __init__(self, firstNode, firstObject, firstDecal, numNodes, numObjects, numDecals):
 		self.firstNode = firstNode
 		self.firstObject = firstObject
@@ -140,7 +143,7 @@ class Subshape(object):
 		self.numObjects = numObjects
 		self.numDecals = numDecals
 
-class ObjectState(object):
+class ObjectState:
 	def __init__(self, vis, frame, matFrame):
 		self.vis = vis
 		self.frame = frame
@@ -154,7 +157,10 @@ class ObjectState(object):
 	def read(cls, stream):
 		return cls(stream.read_float(), stream.read32(), stream.read32())
 
-class Trigger(object):
+class Trigger:
+	StateOn = bit(31)
+	InvertOnReverse = bit(30)
+
 	def __init__(self, state, pos):
 		self.state = state
 		self.pos = pos
@@ -167,7 +173,7 @@ class Trigger(object):
 	def read(cls, stream):
 		return cls(stream.read32(), stream.read_float())
 
-class DetailLevel(object):
+class DetailLevel:
 	def __init__(self, name, subshape, objectDetail, size, avgError=-1.0, maxError=-1.0, polyCount=0):
 		self.name = name
 		self.subshape = subshape
@@ -192,7 +198,7 @@ class DetailLevel(object):
 		obj.polyCount = stream.read32()
 		return obj
 
-class Primitive(object):
+class Primitive:
 	Triangles = 0x00000000
 	Strip = 0x40000000
 	Fan = 0x80000000
@@ -214,24 +220,28 @@ class Primitive(object):
 	def read(cls, stream):
 		return cls(stream.read16(), stream.read16(), stream.read32())
 
-class MeshType(Enum):
-	Standard = 0
-	Skin = 1
-	Decal = 2
-	Sorted = 3
-	Null = 4
+class Mesh:
+	StandardType = 0
+	SkinType = 1
+	DecalType = 2
+	SortedType = 3
+	NullType = 4
+	TypeMask = 7
 
-class Mesh(object):
-	def __init__(self, type=MeshType.Standard):
+	Billboard = bit(31)
+	HasDetailTexture = bit(30)
+	BillboardZAxis = bit(29)
+	UseEncodedNormals = bit(28)
+
+	def __init__(self, mtype):
 		self.bounds = Box(Vector(), Vector())
 		self.center = Vector()
 		self.radius = 0
 		self.numFrames = 1
-		self.matFrames = 1
+		self.numMatFrames = 1
 		self.vertsPerFrame = 1
 		self.parent = -1
-		self.flags = 0
-		self.type = type
+		self.type = mtype
 		self.verts = []
 		self.tverts = []
 		self.normals = []
@@ -239,6 +249,15 @@ class Mesh(object):
 		self.primitives = []
 		self.indices = []
 		self.mindices = []
+
+	def get_type(self):
+		return self.type & Mesh.TypeMask
+
+	def get_flags(self, flag=0xFFFFFFFF):
+		return self.type & flag
+
+	def set_flags(self, flag):
+		self.type |= flag
 
 	def calculate_bounds(self, trans, rot):
 		box = Box(
@@ -277,13 +296,14 @@ class Mesh(object):
 		return radius
 
 	def write(self, stream):
-		stream.write32(self.type.value)
+		mtype = self.get_type()
+		stream.write32(self.type)
 
-		if self.type is MeshType.Null:
+		if mtype == Mesh.NullType:
 			return
 
 		stream.guard()
-		stream.write32(self.numFrames, self.matFrames, self.parent)
+		stream.write32(self.numFrames, self.numMatFrames, self.parent)
 		stream.write_box(self.bounds)
 		stream.write_vec3(self.center)
 		stream.write_float(self.radius)
@@ -313,48 +333,81 @@ class Mesh(object):
 		stream.write16(*self.indices)
 		stream.write32(len(self.mindices))
 		stream.write16(*self.mindices)
-		stream.write32(self.vertsPerFrame, self.flags)
+		stream.write32(self.vertsPerFrame)
+		stream.write32(self.get_flags())
 		stream.guard()
 
-	@classmethod
-	def read(cls, stream):
-		type = MeshType(stream.read32())
-		mesh = cls(type)
+		if self.mtype != Mesh.StandardType:
+			raise ValueError("cannot write non standard mesh")
 
-		if type is MeshType.Null:
-			return mesh
-
+	def read_standard_mesh(self, stream):
 		stream.guard()
 
-		mesh.numFrames = stream.read32()
-		mesh.matFrames = stream.read32()
-		mesh.parent = stream.read32()
-		mesh.bounds = stream.read_box()
-		mesh.center = stream.read_vec3()
-		mesh.radius = stream.read_float()
+		self.numFrames = stream.read32()
+		self.numMatFrames = stream.read32()
+		self.parent = stream.read32()
+		self.bounds = stream.read_box()
+		self.center = stream.read_vec3()
+		self.radius = stream.read_float()
 
 		# Geometry data
 		n_vert = stream.read32()
-		mesh.verts = [stream.read_vec3() for i in range(n_vert)]
+		self.verts = [stream.read_vec3() for i in range(n_vert)]
 		n_tvert = stream.read32()
-		mesh.tverts = [stream.read_vec2() for i in range(n_tvert)]
-		mesh.normals = [stream.read_vec3() for i in range(n_vert)]
-		mesh.enormals = [stream.read8() for i in range(n_vert)]
+		self.tverts = [stream.read_vec2() for i in range(n_tvert)]
+		self.normals = [stream.read_vec3() for i in range(n_vert)]
+		# TODO: don't read this when not relevant
+		self.enormals = [stream.read8() for i in range(n_vert)]
 
 		# Primitives and other stuff
-		mesh.primitives = [Primitive.read(stream) for i in range(stream.read32())]
-		if stream.dtsVersion >= 25:
-			mesh.indices = [stream.read16() for i in range(stream.read32())]
-		else:
-			mesh.indices = [stream.read16() for i in range(stream.read32())]
-		mesh.mindices = [stream.read16() for i in range(stream.read32())]
-		mesh.vertsPerFrame = stream.read32()
-		mesh.flags = stream.read32()
+		self.primitives = [Primitive.read(stream) for i in range(stream.read32())]
+		self.indices = [stream.read16() for i in range(stream.read32())]
+		self.mindices = [stream.read16() for i in range(stream.read32())]
+		self.vertsPerFrame = stream.read32()
+		self.set_flags(stream.read32())
+
 		stream.guard()
+
+	def read_skin_mesh(self, stream):
+		self.read_standard_mesh(stream)
+
+		numVerts = sz = stream.read32()
+		self.verts = [stream.read_vec3() for i in range(sz)]
+
+		self.normals = [stream.read_vec3() for i in range(numVerts)]
+		self.enormals = [stream.read8() for i in range(numVerts)]
+
+		sz = stream.read32()
+		self.initialTransforms = [[stream.read32() for i in range(16)] for i in range(sz)]
+		sz = stream.read32()
+		self.vertexIndexList = [stream.read32() for i in range(sz)]
+		self.boneIndexList = [stream.read32() for i in range(sz)]
+		self.weightList = [stream.read32() for i in range(sz)]
+		sz = stream.read32()
+		self.nodeIndexList = [stream.read32() for i in range(sz)]
+
+		stream.guard()
+
+		# allocShape32(0)
+
+	@classmethod
+	def read(cls, stream):
+		mtype = stream.read32() & Mesh.TypeMask
+		mesh = cls(mtype)
+
+		if mtype == Mesh.StandardType:
+			mesh.read_standard_mesh(stream)
+		elif mtype == Mesh.SkinType:
+			mesh.read_skin_mesh(stream)
+		# others here
+		elif mtype == Mesh.NullType:
+			pass
+		else:
+			raise ValueError("don't know how to read {} mesh".format(mtype))
 
 		return mesh
 
-class Material(object):
+class Material:
 	SWrap            = 0x00000001
 	TWrap            = 0x00000002
 	Translucent      = 0x00000004
@@ -401,10 +454,7 @@ def write_bit_set(fd, bits):
 	for word in words:
 		fd.write(pack("<i", word))
 
-def bit(n):
-	return 1 << n
-
-class Sequence(object):
+class Sequence:
 	UniformScale = bit(0)
 	AlignedScale = bit(1)
 	ArbitraryScale = bit(2)

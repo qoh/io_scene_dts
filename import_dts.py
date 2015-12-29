@@ -298,10 +298,10 @@ def load(operator, context, filepath,
                 index = seq.baseScale + mattersIndex * seq.numKeyframes + frameIndex
 
                 if seq.UniformScale:
-                    s = shape.node_scales_uniform[index]
+                    s = shape.node_uniform_scales[index]
                     ob.scale = s, s, s
                 elif seq.AlignedScale:
-                    ob.scale = shape.node_scales_aligned[index]
+                    ob.scale = shape.node_aligned_scales[index]
                 elif seq.ArbitraryScale:
                     print("Warning: Arbitrary scale animation not implemented")
                     break
@@ -349,13 +349,13 @@ def load(operator, context, filepath,
         for meshIndex in range(obj.numMeshes):
             mesh = shape.meshes[obj.firstMesh + meshIndex]
 
-            if mesh.type == MeshType.Null:
+            if mesh.type == Mesh.NullType:
                 continue
 
-            if mesh.type != MeshType.Standard:
-                print("{} is a {} mesh, skipping due to lack of support".format(
-                    shape.names[obj.name], mesh.type.name))
-                continue
+            if mesh.type != Mesh.StandardType:
+                print("{} is a {} mesh, unsupported, but trying".format(
+                    shape.names[obj.name], mesh.type))
+                # continue
 
             bmesh = create_bmesh(mesh, materials, shape)
             bobj = bpy.data.objects.new(name=shape.names[obj.name], object_data=bmesh)
