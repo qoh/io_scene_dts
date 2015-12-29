@@ -401,33 +401,45 @@ def write_bit_set(fd, bits):
 	for word in words:
 		fd.write(pack("<i", word))
 
+def bit(n):
+	return 1 << n
+
 class Sequence(object):
+	UniformScale = bit(0)
+	AlignedScale = bit(1)
+	ArbitraryScale = bit(2)
+	Blend = bit(3)
+	Cyclic = bit(4)
+	MakePath = bit(5)
+	IflInit = bit(6)
+	HasTranslucency = bit(7)
+
 	def __init__(self):
 		# todo: get rid of this
-		self.nameIndex = None
-		self.flags = None
-		self.numKeyframes = None
-		self.duration = None
-		self.priority = None
-		self.firstGroundFrame = None
-		self.numGroundFrames = None
-		self.baseRotation = None
-		self.baseTranslation = None
-		self.baseScale = None
-		self.baseObjectState = None
-		self.baseDecalState = None
-		self.firstTrigger = None
-		self.numTriggers = None
-		self.toolBegin = None
+		self.nameIndex = -1
+		self.flags = 0
+		self.numKeyframes = 0
+		self.duration = 0
+		self.priority = 0
+		self.firstGroundFrame = 0
+		self.numGroundFrames = 0
+		self.baseRotation = 0
+		self.baseTranslation = 0
+		self.baseScale = 0
+		self.baseObjectState = 0
+		self.baseDecalState = 0
+		self.firstTrigger = 0
+		self.numTriggers = 0
+		self.toolBegin = 0
 
-		self.rotationMatters = None
-		self.translationMatters = None
-		self.scaleMatters = None
-		self.decalMatters = None
-		self.iflMatters = None
-		self.visMatters = None
-		self.frameMatters = None
-		self.matFrameMatters = None
+		self.rotationMatters = []
+		self.translationMatters = []
+		self.scaleMatters = []
+		self.decalMatters = []
+		self.iflMatters = []
+		self.visMatters = []
+		self.frameMatters = []
+		self.matFrameMatters = []
 
 	def write(self, fd):
 		fd.write(pack("<i", self.nameIndex))

@@ -27,6 +27,8 @@ def write_debug_report(filepath, shape):
         p("Triggers: " + str(len(shape.triggers)))
         p("Sequences: " + str(len(shape.sequences)))
 
+        p("Node rotations: " + str(len(shape.node_rotations)))
+        p("Node translations: " + str(len(shape.node_translations)))
         p("Node scales uniform: " + str(len(shape.node_scales_uniform)))
         p("Node scales aligned: " + str(len(shape.node_scales_aligned)))
         p("Node scales arbitrary: " + str(len(shape.node_scales_arbitrary)))

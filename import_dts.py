@@ -245,40 +245,76 @@ def load(operator, context, filepath,
     elif node_mode == "BONE":
         pass
 
-    #
-    # # Try animation?
-    # globalToolIndex = 10
-    # fps = 24
-    #
-    # for seq in shape.sequences:
-    #     print("seq", shape.names[seq.nameIndex], seq.numKeyframes)
-    #
-    #     nodesRotation = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.rotationMatters))))
-    #     nodesTranslation = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.translationMatters))))
-    #
-    #     step = 5
-    #
-    #     for mattersIndex, node in enumerate(nodesTranslation):
-    #         ob = node_obs_val[node]
-    #
-    #         print(" ", shape.names[node.name], " has translation")
-    #         for frameIndex in range(seq.numKeyframes):
-    #             old = ob.delta_location
-    #             ob.delta_location = tuple(shape.node_translations[seq.baseTranslation + mattersIndex * seq.numKeyframes + frameIndex])
-    #             ob.keyframe_insert("delta_location", index=-1, frame=globalToolIndex + frameIndex * step)
-    #             ob.delta_location = old
-    #
-    #     for mattersIndex, node in enumerate(nodesRotation):
-    #         ob = node_obs_val[node]
-    #
-    #         print(" ", shape.names[node.name], "has rotation")
-    #         for frameIndex in range(seq.numKeyframes):
-    #             old = ob.delta_rotation_quaternion
-    #             ob.delta_rotation_quaternion = shape.node_rotations[seq.baseRotation + mattersIndex * seq.numKeyframes + frameIndex].to_blender()
-    #             ob.keyframe_insert("delta_rotation_quaternion", index=-1, frame=globalToolIndex + frameIndex * step)
-    #             ob.delta_rotation_quaternion = old
-    #
-    #     globalToolIndex += seq.numKeyframes * step + 10
+    # Try animation?
+    globalToolIndex = 10
+    fps = context.scene.render.fps
+
+    sequences_text = []
+
+    for seq in shape.sequences:
+        name = shape.names[seq.nameIndex]
+        print("Importing sequence", name)
+
+        flags = []
+
+        if seq.flags & Sequence.Cyclic:
+            flags.append("cyclic")
+
+        if seq.flags & Sequence.Blend:
+            flags.append("blend {}".format(seq.priority))
+
+        if flags:
+            sequences_text.append(name + ": " + ", ".join(flags))
+
+        nodesRotation = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.rotationMatters))))
+        nodesTranslation = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.translationMatters))))
+        nodesScale = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.scaleMatters))))
+
+        step = 5
+
+        for mattersIndex, node in enumerate(nodesTranslation):
+            ob = node_obs_val[node]
+
+            for frameIndex in range(seq.numKeyframes):
+                old = ob.location
+                ob.location = shape.node_translations[seq.baseTranslation + mattersIndex * seq.numKeyframes + frameIndex]
+                ob.keyframe_insert("location", index=-1, frame=globalToolIndex + frameIndex * step)
+                ob.location = old
+
+        for mattersIndex, node in enumerate(nodesRotation):
+            ob = node_obs_val[node]
+
+            for frameIndex in range(seq.numKeyframes):
+                old = ob.rotation_quaternion
+                ob.rotation_quaternion = shape.node_rotations[seq.baseRotation + mattersIndex * seq.numKeyframes + frameIndex].to_blender()
+                ob.keyframe_insert("rotation_quaternion", index=-1, frame=globalToolIndex + frameIndex * step)
+                ob.rotation_quaternion = old
+
+        for mattersIndex, node in enumerate(nodesScale):
+            ob = node_obs_val[node]
+
+            for frameIndex in range(seq.numKeyframes):
+                old = ob.scale
+                index = seq.baseScale + mattersIndex * seq.numKeyframes + frameIndex
+
+                if seq.UniformScale:
+                    s = shape.node_scales_uniform[index]
+                    ob.scale = s, s, s
+                elif seq.AlignedScale:
+                    ob.scale = shape.node_scales_aligned[index]
+                elif seq.ArbitraryScale:
+                    print("Warning: Arbitrary scale animation not implemented")
+                    break
+                else:
+                    print("Warning: Invalid scale flags found in sequence")
+                    break
+
+                ob.keyframe_insert("scale", index=-1, frame=globalToolIndex + frameIndex * step)
+                ob.scale = old
+
+        context.scene.timeline_markers.new(name + ":start", globalToolIndex)
+        context.scene.timeline_markers.new(name + ":end", globalToolIndex + seq.numKeyframes * step)
+        globalToolIndex += seq.numKeyframes * step + 30
 
         # action = bpy.data.actions.new(name=shape.names[seq.nameIndex])
         #
@@ -301,6 +337,13 @@ def load(operator, context, filepath,
         #             fcu.keyframe_points.add(1)
         #             fcu.keyframe_points[ind] = frameIndex, shape.node_rotations[seq.baseRotation + frameIndex][dim]
 
+    if "Sequences" in bpy.data.texts:
+        sequences_buf = bpy.data.texts["Sequences"]
+    else:
+        sequences_buf = bpy.data.texts.new("Sequences")
+
+    sequences_buf.from_string("\n".join(sequences_text))
+
     # Then put objects in the armatures
     for obj in shape.objects:
         for meshIndex in range(obj.numMeshes):
@@ -319,7 +362,13 @@ def load(operator, context, filepath,
             context.scene.objects.link(bobj)
 
             if obj.node != -1:
-                bobj.parent = node_obs[obj.node]
+                if node_mode == "BONE":
+                    bobj.location = node_obs[obj.node].head
+                    bobj.parent = armature_ob
+                    bobj.parent_bone = node_obs[obj.node].name
+                    bobj.parent_type = "BONE"
+                else:
+                    bobj.parent = node_obs[obj.node]
 
             if hide_default_player and shape.names[obj.name] not in blockhead_nodes:
                 bobj.hide = True

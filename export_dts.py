@@ -1,6 +1,6 @@
 import bpy, bmesh
-from mathutils import Vector
-from math import sqrt
+from mathutils import Matrix, Euler
+from math import sqrt, pi
 from operator import attrgetter
 from itertools import groupby
 
@@ -86,9 +86,24 @@ def rotation_from_ob(ob):
 def eksi_bone_zone(shape, bones, parent):
     for bone in bones:
         node = Node(shape.name(bone.name), parent)
+        node.bl_ob = bone
         node.translation = bone.head
         node.rotation = Quaternion()
         shape.nodes.append(node)
+
+def export_bones(lookup, shape, bones, parent=-1):
+    for bone in bones:
+        node = Node(shape.name(bone.name), parent)
+        node.bl_ob = bone
+        r = (bone.matrix.to_4x4() * Matrix.Rotation(pi / -2, 4, "X")).to_quaternion()
+        node.rotation = Quaternion(r[1], r[2], r[3], -r[0])
+        if "zero_length" in bone:
+            node.translation = Vector()
+        else:
+            node.translation = bone.tail - bone.head
+        shape.nodes.append(node)
+        lookup[bone.name] = node
+        export_bones(lookup, shape, bone.children, node)
 
 def export_all_nodes(lookup, shape, obs, parent=-1):
     for ob in obs:
@@ -97,6 +112,7 @@ def export_all_nodes(lookup, shape, obs, parent=-1):
                 print("Warning: '{}' uses scale, which cannot be export to DTS nodes".format(ob.name))
 
             node = Node(shape.name(ob.name), parent)
+            node.bl_ob = ob
             node.translation = ob.location
             node.rotation = rotation_from_ob(ob)
             shape.nodes.append(node)
@@ -109,6 +125,21 @@ def export_all_nodes(lookup, shape, obs, parent=-1):
                     eksi_bone_zone(shape, bones, node)
 
             export_all_nodes(lookup, shape, ob.children, node)
+
+def evaluate_all(curves, frame):
+    return tuple(map(lambda c: c.evaluate(frame), curves))
+
+def array_from_fcurves(curves, data_path, array_size):
+    found = False
+    array = [None] * array_size
+
+    for curve in curves:
+        if curve.data_path == data_path and curve.array_index != -1:
+            array[curve.array_index] = curve
+            found = True
+
+    if found:
+        return tuple(array)
 
 def save(operator, context, filepath,
          blank_material=True,
@@ -142,6 +173,12 @@ def save(operator, context, filepath,
         shape.default_rotations.append(node.rotation)
 
     node_lookup = {ob: node_indices[node] for ob, node in node_lookup.items()}
+    animated_nodes = []
+
+    for node in shape.nodes:
+        data = node.bl_ob.animation_data
+        if data and data.action and len(data.action.fcurves):
+            animated_nodes.append(node.bl_ob)
 
     # Now that we have all the nodes, attach our fabled objects to them
     scene_lods = {}
@@ -409,6 +446,165 @@ def save(operator, context, filepath,
         (shape.bounds.min.x + shape.bounds.max.x) / 2,
         (shape.bounds.min.y + shape.bounds.max.y) / 2,
         (shape.bounds.min.z + shape.bounds.max.z) / 2))
+
+    sequences = {}
+
+    for marker in context.scene.timeline_markers:
+        if ":" not in marker.name:
+            continue
+
+        name, what = marker.name.rsplit(":", 1)
+
+        if name not in sequences:
+            sequences[name] = {}
+
+        if what in sequences[name]:
+            print("Warning: Got duplicate '{}' marker for sequence '{}' at frame {} (first was at frame {}), ignoring".format(what, name, marker.frame, sequences[name][what].frame))
+            continue
+
+        sequences[name][what] = marker
+
+    sequence_flags_strict = False
+    sequence_flags = {}
+    sequence_missing = set()
+
+    if "Sequences" in bpy.data.texts:
+        for line in bpy.data.texts["Sequences"].as_string().split("\n"):
+            line = line.strip()
+
+            if not line:
+                continue
+
+            if line == "strict":
+                sequence_flags_strict = True
+                continue
+
+            if ":" not in line:
+                print("Invalid line in 'Sequences':", line)
+                continue
+
+            name, flags = line.split(":", 1)
+
+            if flags.lstrip():
+                flags = tuple(map(lambda f: f.strip(), flags.split(",")))
+            else:
+                flags = ()
+
+            sequence_flags[name] = flags
+            sequence_missing.add(name)
+
+    for name, markers in sequences.items():
+        if "start" not in markers:
+            return fail(operator, "Missing start marker for sequence '{}'".format(name))
+
+        if "end" not in markers:
+            return fail(operator, "Missing end marker for sequence '{}'".format(name))
+
+        seq = Sequence()
+        seq.nameIndex = shape.name(name)
+        seq.flags = Sequence.AlignedScale
+
+        if name in sequence_flags:
+            for part in sequence_flags[name]:
+                flag, *data = part.split(" ", 1)
+                if data: data = data[0]
+
+                if flag == "cyclic":
+                    seq.flags |= Sequence.Cyclic
+                elif flag == "blend":
+                    seq.flags |= Sequence.Blend
+                    seq.priority = int(data)
+                else:
+                    print("Warning: Unknown flag '{}' (used by sequence '{}')".format(flag, name))
+
+            sequence_missing.remove(name)
+        elif sequence_flags_strict:
+            return fail(operator, "Missing 'Sequences' line for sequence '{}'".format(name))
+
+        frame_start = markers["start"].frame
+        frame_end = markers["end"].frame
+
+        frame_range = frame_end - frame_start + 1
+        frame_step = 1 # TODO: GCD of keyframe spacings
+
+        seq.toolBegin = frame_start
+        seq.duration = frame_range * (context.scene.render.fps_base / context.scene.render.fps)
+
+        seq.numKeyframes = int(math.ceil(float(frame_range) / frame_step))
+        seq.firstGroundFrame = len(shape.ground_translations)
+        seq.baseRotation = len(shape.node_rotations)
+        seq.baseTranslation = len(shape.node_translations)
+        seq.baseScale = len(shape.node_scales_uniform)
+        seq.baseObjectState = len(shape.objectstates)
+        seq.baseDecalState = len(shape.decalstates)
+        seq.firstTrigger = len(shape.triggers)
+
+        seq.rotationMatters = [False] * len(shape.nodes)
+        seq.translationMatters = [False] * len(shape.nodes)
+        seq.scaleMatters = [False] * len(shape.nodes)
+        seq.decalMatters = [False] * len(shape.nodes)
+        seq.iflMatters = [False] * len(shape.nodes)
+        seq.visMatters = [False] * len(shape.nodes)
+        seq.frameMatters = [False] * len(shape.nodes)
+        seq.matFrameMatters = [False] * len(shape.nodes)
+
+        shape.sequences.append(seq)
+
+        seq_curves_rotation = []
+        seq_curves_translation = []
+        seq_curves_scale = []
+
+        for ob in animated_nodes:
+            index = node_lookup[ob]
+            fcurves = ob.animation_data.action.fcurves
+
+            curves_rotation = array_from_fcurves(fcurves, "rotation_euler", 3)
+            curves_translation = array_from_fcurves(fcurves, "location", 3)
+            curves_scale = array_from_fcurves(fcurves, "scale", 3)
+
+            if curves_rotation:
+                print("rotation matters for", ob.name)
+                seq_curves_rotation.append(curves_rotation)
+                seq.rotationMatters[index] = True
+
+            if curves_translation:
+                print("translation matters for", ob.name)
+                seq_curves_translation.append(curves_translation)
+                seq.translationMatters[index] = True
+
+            if curves_scale:
+                print("scale matters for", ob.name)
+                seq_curves_scale.append(curves_scale)
+                seq.scaleMatters[index] = True
+
+            seq.translationMatters[index] = True
+
+        frame_indices = []
+        frame_current = frame_start
+
+        while frame_current <= frame_end:
+            frame_indices.append(frame_current)
+
+            if frame_current == frame_end:
+                break
+
+            frame_current = min(frame_end, frame_current + frame_step)
+
+        for curves in seq_curves_rotation:
+            for frame in frame_indices:
+                r = Euler(evaluate_all(curves, frame), "XYZ").to_quaternion()
+                shape.node_rotations.append(Quaternion(r[1], r[2], r[3], -r[0]))
+
+        for curves in seq_curves_translation:
+            for frame in frame_indices:
+                shape.node_translations.append(Vector(evaluate_all(curves, frame)))
+
+        for curves in seq_curves_scale:
+            for frame in frame_indices:
+                shape.node_scales_aligned.append(Vector(evaluate_all(curves, frame)))
+
+    for name in sequence_missing:
+        print("Warning: Sequence '{}' exists in flags file, but no markers were found".format(name))
 
     if debug_report:
         print("Writing debug report")
