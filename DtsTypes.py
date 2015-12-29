@@ -1,65 +1,17 @@
 from collections import namedtuple
 from struct import pack, unpack
 from enum import Enum
+import mathutils
+from mathutils import Vector
 import math
 
-class Point3D(object):
-	def __init__(self, x=0, y=0, z=0):
-		self.x = x
-		self.y = y
-		self.z = z
-
-	def __repr__(self):
-		x = math.floor(self.x * 10000 + 0.5) / 10000
-		y = math.floor(self.y * 10000 + 0.5) / 10000
-		z = math.floor(self.z * 10000 + 0.5) / 10000
-		return "({}, {}, {})".format(x, y, z)
-
-	def len(self):
-		return math.sqrt(self.x ** 2 + self.y ** 2 + self.z ** 2)
-
-	def __add__(self, other):
-		return Point3D(self.x + other.x, self.y + other.y, self.z + other.z)
-
-	def __sub__(self, other):
-		return Point3D(self.x - other.x, self.y - other.y, self.z - other.z)
-
-	def __iter__(self):
-		yield self.x
-		yield self.y
-		yield self.z
-
-	def copy(self):
-		return Point3D(self.x, self.y, self.z)
-
-	def tuple(self):
-		return (self.x, self.y, self.z)
-
-class Point2D(object):
-	def __init__(self, x=0, y=0):
-		self.x = x
-		self.y = y
-
-	def __repr__(self):
-		x = math.floor(self.x * 10000 + 0.5) / 10000
-		y = math.floor(self.y * 10000 + 0.5) / 10000
-		return "({}, {})".format(x, y)
-
-	def tuple(self):
-		return (self.x, self.y)
-
 class Box(object):
-	def __init__(self, min=None, max=None):
-		if min == None: min = Point3D()
-		if max == None: max = Point3D()
-
+	def __init__(self, min, max):
 		self.min = min
 		self.max = max
 
 	def __repr__(self):
 		return "({}, {})".format(self.min, self.max)
-
-Point = Point3D
 
 class Quaternion(object):
 	def __init__(self, x=0, y=0, z=0, w=1):
@@ -82,6 +34,15 @@ class Quaternion(object):
 		w = math.floor(self.w * 10000 + 0.5) / 10000
 		return "({}, {}, {}, {})".format(x, y, z, w)
 
+	def __iter__(self):
+		yield self.x
+		yield self.y
+		yield self.z
+		yield self.w
+
+	def to_blender(self):
+		return mathutils.Quaternion((-self.w, self.x, self.y, self.z))
+
 	def apply(self, v):
 		v0 = v.x
 		v1 = v.y
@@ -103,46 +64,53 @@ class Quaternion(object):
 		r1 = -ir0*s2 +ir1*s3 +ir2*s0 +ir3*s1
 		r2 = +ir0*s1 -ir1*s0 +ir2*s3 +ir3*s2
 		#r3 = -ir0*s0 -ir1*s1 -ir2*s2 +ir3*s3
-		return Point(r0, r1, r2)
+		return Vector((r0, r1, r2))
 
 class Node(object):
-	def __init__(self, name, parent=-1, firstObject=-1, child=-1, sibling=-1):
+	def __init__(self, name, parent=-1):
 		self.name = name
 		self.parent = parent
-		self.firstObject = firstObject
-		self.child = child
-		self.sibling = sibling
+
+		# Unused
+		self.firstObject = -1
+		self.firstChild = -1
+		self.nextSibling = -1
 
 	def write(self, stream):
 		stream.write32(
 			self.name, self.parent,
-			self.firstObject, self.child, self.sibling)
+			self.firstObject, self.firstChild, self.nextSibling)
 
 	@classmethod
 	def read(cls, stream):
-		return cls(
-			stream.read32(), stream.read32(),
-			stream.read32(), stream.read32(), stream.read32())
+		obj = cls(stream.read32(), stream.read32())
+		obj.firstObject = stream.read32()
+		obj.firstChild = stream.read32()
+		obj.nextSibling = stream.read32()
+		return obj
 
 class Object(object):
-	def __init__(self, name, numMeshes, firstMesh, node, sibling=-1, firstDecal=-1):
+	def __init__(self, name, numMeshes, firstMesh, node):
 		self.name = name
 		self.numMeshes = numMeshes
 		self.firstMesh = firstMesh
 		self.node = node
-		self.sibling = sibling
-		self.firstDecal = firstDecal
+
+		# Unused
+		self.nextSibling = -1
+		self.firstDecal = -1
 
 	def write(self, stream):
 		stream.write32(
 			self.name, self.numMeshes, self.firstMesh,
-			self.node, self.sibling, self.firstDecal)
+			self.node, self.nextSibling, self.firstDecal)
 
 	@classmethod
 	def read(cls, stream):
-		return cls(
-			stream.read32(), stream.read32(), stream.read32(),
-			stream.read32(), stream.read32(), stream.read32())
+		obj = cls(stream.read32(), stream.read32(), stream.read32(), stream.read32())
+		obj.nextSibling = stream.read32()
+		obj.firstDecal = stream.read32()
+		return obj
 
 class IflMaterial(object):
 	def __init__(self, name, slot, firstFrame, time, numFrames):
@@ -205,9 +173,11 @@ class DetailLevel(object):
 		self.subshape = subshape
 		self.objectDetail = objectDetail
 		self.size = size
-		self.avgError = avgError
-		self.maxError = maxError
-		self.polyCount = polyCount
+
+		# Unused
+		self.avgError = -1.0
+		self.maxError = -1.0
+		self.polyCount = 0
 
 	def write(self, stream):
 		stream.write32(self.name, self.subshape, self.objectDetail)
@@ -216,10 +186,11 @@ class DetailLevel(object):
 
 	@classmethod
 	def read(cls, stream):
-		return cls(
-			stream.read32(), stream.read32(), stream.read32(),
-			stream.read_float(), stream.read_float(), stream.read_float(),
-			stream.read32())
+		obj = cls(stream.read32(), stream.read32(), stream.read32(), stream.read_float())
+		obj.avgError = stream.read_float()
+		obj.maxError = stream.read_float()
+		obj.polyCount = stream.read32()
+		return obj
 
 class Primitive(object):
 	Triangles = 0x00000000
@@ -252,8 +223,8 @@ class MeshType(Enum):
 
 class Mesh(object):
 	def __init__(self, type=MeshType.Standard):
-		self.bounds = Box(Point(0, 0, 0), Point(0, 0, 0))
-		self.center = Point(0, 0, 0)
+		self.bounds = Box(Vector(), Vector())
+		self.center = Vector()
 		self.radius = 0
 		self.numFrames = 1
 		self.matFrames = 1
@@ -271,8 +242,8 @@ class Mesh(object):
 
 	def calculate_bounds(self, trans, rot):
 		box = Box(
-			Point( 10e30,  10e30,  10e30),
-			Point(-10e30, -10e30, -10e30))
+			Vector(( 10e30,  10e30,  10e30)),
+			Vector((-10e30, -10e30, -10e30)))
 
 		for vert in self.verts:
 			co = rot.apply(vert) + trans
@@ -291,7 +262,7 @@ class Mesh(object):
 
 		for vert in self.verts:
 			tv = rot.apply(vert) + trans
-			radius = max(radius, (tv - center).len())
+			radius = max(radius, (tv - center).length)
 
 		return radius
 
@@ -301,7 +272,7 @@ class Mesh(object):
 		for vert in self.verts:
 			tv = rot.apply(vert) + trans
 			delta = tv - center
-			radius = max(radius, Point(delta.x, delta.y, 0).len())
+			radius = max(radius, Vector((delta.x, delta.y)).length)
 
 		return radius
 
@@ -314,21 +285,21 @@ class Mesh(object):
 		stream.guard()
 		stream.write32(self.numFrames, self.matFrames, self.parent)
 		stream.write_box(self.bounds)
-		stream.write_point(self.center)
+		stream.write_vec3(self.center)
 		stream.write_float(self.radius)
 
 		# Geometry data
 		stream.write32(len(self.verts))
 		for vert in self.verts:
-			stream.write_point(vert)
+			stream.write_vec3(vert)
 		stream.write32(len(self.tverts))
 		for tvert in self.tverts:
-			stream.write_point2d(tvert)
+			stream.write_vec2(tvert)
 
 		assert len(self.normals) == len(self.verts)
 		assert len(self.enormals) == len(self.verts)
 		for normal in self.normals:
-			stream.write_point(normal)
+			stream.write_vec3(normal)
 		for enormal in self.enormals:
 			stream.write8(enormal)
 
@@ -359,15 +330,15 @@ class Mesh(object):
 		mesh.matFrames = stream.read32()
 		mesh.parent = stream.read32()
 		mesh.bounds = stream.read_box()
-		mesh.center = stream.read_point()
+		mesh.center = stream.read_vec3()
 		mesh.radius = stream.read_float()
 
 		# Geometry data
 		n_vert = stream.read32()
-		mesh.verts = [stream.read_point() for i in range(n_vert)]
+		mesh.verts = [stream.read_vec3() for i in range(n_vert)]
 		n_tvert = stream.read32()
-		mesh.tverts = [stream.read_point2d() for i in range(n_tvert)]
-		mesh.normals = [stream.read_point() for i in range(n_vert)]
+		mesh.tverts = [stream.read_vec2() for i in range(n_tvert)]
+		mesh.normals = [stream.read_vec3() for i in range(n_vert)]
 		mesh.enormals = [stream.read8() for i in range(n_vert)]
 
 		# Primitives and other stuff

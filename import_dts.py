@@ -7,6 +7,8 @@ from .DtsShape import DtsShape
 from .DtsTypes import *
 from .write_report import write_debug_report
 
+import operator
+from functools import reduce
 from random import random
 
 blockhead_nodes = ("HeadSkin", "chest", "Larm", "Lhand", "Rarm", "Rhand", "pants", "LShoe", "RShoe")
@@ -172,6 +174,7 @@ def create_bmesh(dmesh, materials, shape):
     return me
 
 def load(operator, context, filepath,
+         node_mode="EMPTY",
          hide_default_player=False,
          debug_report=False):
     shape = DtsShape()
@@ -200,8 +203,6 @@ def load(operator, context, filepath,
         mat["iflTime"] = ifl.time
 
     # First load all the nodes into armatures
-    nodes = [] # For accessing indices when parenting later
-
     lod_by_mesh = {}
 
     for lod in shape.detail_levels:
@@ -214,27 +215,91 @@ def load(operator, context, filepath,
 
     order_buf.from_string("\n".join(shape.names[node.name] for node in shape.nodes))
 
-    for i, node in enumerate(shape.nodes):
-        amt = bpy.data.armatures.new(shape.names[node.name])
-        bnode = bpy.data.objects.new(name=shape.names[node.name], object_data=amt)
-        bnode.location = mathutils.Vector(shape.default_translations[i].tuple())
+    node_obs = []
+    node_obs_val = {}
 
-        bnode.rotation_mode = "QUATERNION"
-        # weird representation difference -wxyz vs xyzw
-        bnode.rotation_quaternion = mathutils.Quaternion((
-            -shape.default_rotations[i].w,
-            shape.default_rotations[i].x,
-            shape.default_rotations[i].y,
-            shape.default_rotations[i].z
-        ))
+    if node_mode == "EMPTY":
+        for i, node in enumerate(shape.nodes):
+            ob = bpy.data.objects.new(shape.names[node.name], None)
+            ob.empty_draw_type = "SINGLE_ARROW"
+            ob.empty_draw_size = 0.5
 
-        context.scene.objects.link(bnode)
-        nodes.append((node, bnode, i))
+            if node.parent != -1:
+                ob.parent = node_obs[node.parent]
 
-    # Now set all the parents appropriately
-    for node, bnode, nodei in nodes:
-        if node.parent != -1:
-            bnode.parent = nodes[node.parent][1]
+            ob.location = shape.default_translations[i]
+            ob.rotation_mode = "QUATERNION"
+            # weird representation difference -wxyz vs xyzw
+            ob.rotation_quaternion = mathutils.Quaternion((
+                -shape.default_rotations[i].w,
+                shape.default_rotations[i].x,
+                shape.default_rotations[i].y,
+                shape.default_rotations[i].z
+            ))
+
+            context.scene.objects.link(ob)
+            node_obs.append(ob)
+            node_obs_val[node] = ob
+    elif node_mode == "ARMATURE":
+        pass
+    elif node_mode == "BONE":
+        pass
+
+    #
+    # # Try animation?
+    # globalToolIndex = 10
+    # fps = 24
+    #
+    # for seq in shape.sequences:
+    #     print("seq", shape.names[seq.nameIndex], seq.numKeyframes)
+    #
+    #     nodesRotation = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.rotationMatters))))
+    #     nodesTranslation = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.translationMatters))))
+    #
+    #     step = 5
+    #
+    #     for mattersIndex, node in enumerate(nodesTranslation):
+    #         ob = node_obs_val[node]
+    #
+    #         print(" ", shape.names[node.name], " has translation")
+    #         for frameIndex in range(seq.numKeyframes):
+    #             old = ob.delta_location
+    #             ob.delta_location = tuple(shape.node_translations[seq.baseTranslation + mattersIndex * seq.numKeyframes + frameIndex])
+    #             ob.keyframe_insert("delta_location", index=-1, frame=globalToolIndex + frameIndex * step)
+    #             ob.delta_location = old
+    #
+    #     for mattersIndex, node in enumerate(nodesRotation):
+    #         ob = node_obs_val[node]
+    #
+    #         print(" ", shape.names[node.name], "has rotation")
+    #         for frameIndex in range(seq.numKeyframes):
+    #             old = ob.delta_rotation_quaternion
+    #             ob.delta_rotation_quaternion = shape.node_rotations[seq.baseRotation + mattersIndex * seq.numKeyframes + frameIndex].to_blender()
+    #             ob.keyframe_insert("delta_rotation_quaternion", index=-1, frame=globalToolIndex + frameIndex * step)
+    #             ob.delta_rotation_quaternion = old
+    #
+    #     globalToolIndex += seq.numKeyframes * step + 10
+
+        # action = bpy.data.actions.new(name=shape.names[seq.nameIndex])
+        #
+        # for dim in range(3):
+        #     fcu = action.fcurves.new(data_path="location", index=dim)
+        #     fcu.keyframe_points.add(2)
+        #     fcu.keyframe_points[0].co = 10.0, 0.0
+        #     fcu.keyframe_points[1].co = 20.0, 1.0
+            # for frameIndex in range(seq.numKeyframes):
+            #     if seq.translationMatters[frameIndex]:
+            #         ind = len(fcu.keyframe_points)
+            #         fcu.keyframe_points.add(1)
+            #         fcu.keyframe_points[ind] = frameIndex, shape.node_translations[seq.baseTranslation + frameIndex][dim]
+
+        # for dim in range(4):
+        #     fcu = action.fcurves.new(data_path="rotation_quaternion", index=dim)
+        #     for frameIndex in range(seq.numKeyframes):
+        #         if seq.rotationMatters[frameIndex]:
+        #             ind = len(fcu.keyframe_points)
+        #             fcu.keyframe_points.add(1)
+        #             fcu.keyframe_points[ind] = frameIndex, shape.node_rotations[seq.baseRotation + frameIndex][dim]
 
     # Then put objects in the armatures
     for obj in shape.objects:
@@ -254,7 +319,7 @@ def load(operator, context, filepath,
             context.scene.objects.link(bobj)
 
             if obj.node != -1:
-                bobj.parent = nodes[obj.node][1]
+                bobj.parent = node_obs[obj.node]
 
             if hide_default_player and shape.names[obj.name] not in blockhead_nodes:
                 bobj.hide = True

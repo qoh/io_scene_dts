@@ -11,6 +11,7 @@ from .write_report import write_debug_report
 import re
 # re really isn't necessary. oh well.
 re_lod_size = re.compile(r"(-?\d+)$")
+re_lod_dup_name = re.compile(r"\.LOD\d{3}$")
 common_col_name = re.compile(r"^(LOS)?[cC]ol-?\d+$")
 default_bone_name = re.compile(r"^Bone(\.\d+)?$")
 
@@ -18,9 +19,6 @@ def fail(operator, message):
     print("Error:", message)
     operator.report({"ERROR"}, message)
     return {"FINISHED"}
-
-def create_blank_material():
-    return Material(name="blank", flags=Material.SWrap | Material.TWrap | Material.NeverEnvMap, reflectanceMap=0)
 
 def export_material(mat, shape):
     # print("Exporting material", mat.name)
@@ -75,108 +73,64 @@ def export_material(mat, shape):
 
     return material_index
 
-def get_parent_armature(ob):
-    parent = ob.parent
-    while parent:
-        if parent.type == "ARMATURE":
-            return parent
-        parent = parent.parent
+def rotation_from_ob(ob):
+    if ob.rotation_mode == "QUATERNION":
+        r = ob.rotation_quaternion
+    elif ob.rotation_mode == "AXIS_ANGLE":
+        print("Warning: '{}' uses unsupported axis angle rotation".format(ob.name))
+        r = ob.rotation_quaternion # ob.rotation_axis_angle
+    else:
+        r = ob.rotation_euler.to_quaternion()
+    return Quaternion(r[1], r[2], r[3], -r[0])
 
-def get_deep_children(search, obs):
-    for ob in obs:
-        if ob.type == search:
-            yield ob
-        else:
-            yield from get_deep_children(search, ob.children)
-
-def explore_bones_because_teneksi(shape, bones, parent):
+def eksi_bone_zone(shape, bones, parent):
     for bone in bones:
         node = Node(shape.name(bone.name), parent)
-        node.translation = Point(*bone.head)
+        node.translation = bone.head
         node.rotation = Quaternion()
         shape.nodes.append(node)
 
-def explore_armatures(lookup, shape, obs, parent=-1):
+def export_all_nodes(lookup, shape, obs, parent=-1):
     for ob in obs:
-        if ob.type == "ARMATURE":
-            # print("Exporting armature", ob.name)
+        if ob.type == "ARMATURE" or ob.type == "EMPTY":
             if ob.scale != Vector((1,1,1)):
-                print("Warning: Armature '{}' has scale that cannot export to DTS".format(ob.name))
+                print("Warning: '{}' uses scale, which cannot be export to DTS nodes".format(ob.name))
 
             node = Node(shape.name(ob.name), parent)
-            node.translation = Point(*ob.location)
-
-            # Try to find a quaternion representation of the armature rotation
-            if ob.rotation_mode == "QUATERNION":
-                rot = ob.rotation_quaternion
-            elif ob.rotation_mode == "AXIS_ANGLE":
-                print("Warning: Armature '{}' axis angle rotation".format(ob.name))
-                rot = ob.rotation_quaternion # ob.rotation_axis_angle
-            else:
-                rot = ob.rotation_euler.to_quaternion()
-
-            # Weird representation difference -wxyz -> xyzw
-            node.rotation = Quaternion(rot[1], rot[2], rot[3], -rot[0])
-
+            node.translation = ob.location
+            node.rotation = rotation_from_ob(ob)
             shape.nodes.append(node)
-            lookup[ob] = next_parent = node
+            lookup[ob] = node
 
-            bones = ob.data.bones
-            if len(bones) != 0 and (len(bones) != 1 or not default_bone_name.match(bones[0].name)):
-                print("Warning: Exporting bones in armature '{}' as nodes. Use child armatures instead.".format(ob.name))
-                explore_bones_because_teneksi(shape, bones, next_parent)
-        else:
-            next_parent = parent
+            if ob.type == "ARMATURE":
+                bones = ob.data.bones
+                if len(bones) >= 2:
+                    print("Warning: Exporting bones in armature '{}' as nodes. Use child armatures instead.".format(ob.name))
+                    eksi_bone_zone(shape, bones, node)
 
-        explore_armatures(lookup, shape, ob.children, next_parent)
+            export_all_nodes(lookup, shape, ob.children, node)
 
 def save(operator, context, filepath,
          blank_material=True,
          debug_report=True):
-    blank_material_index = None
+    print("Exporting scene to DTS")
 
     scene = context.scene
     shape = DtsShape()
 
-    smin = [10e30, 10e30, 10e30]
-    smax = [-10e30, -10e30, -10e30]
+    blank_material_index = None
+    auto_root_index = None
 
-    print("Exporting scene to DTS")
-
-    scene_lods = {}
-    scene_objects = {}
-
-    scene_meshes = filter(lambda bobj: bobj.type == "MESH", scene.objects)
-    scene_armatures = filter(lambda bobj: bobj.type == "ARMATURE", scene.objects)
-
-    root_scene = tuple(filter(lambda ob: not ob.parent, scene.objects))
-
-    # Create a DTS node for every armature in the scene
+    # Create a DTS node for every armature/empty in the scene
     node_lookup = {}
-    explore_armatures(node_lookup, shape, root_scene)
-
-    root_nodes = tuple(filter(lambda n: n.parent == -1, shape.nodes))
-    root_objects = tuple(filter(lambda n: get_parent_armature(n) is None, get_deep_children("MESH", root_scene)))
+    export_all_nodes(node_lookup, shape, filter(lambda o: not o.parent, scene.objects))
 
     # Figure out if we should create our own root node
-    if len(root_nodes) > 1 or root_objects:
-        print("Warning: Multiple root nodes/root objects, adding fake root")
-
-        if "NodeOrder" in bpy.data.texts:
-            return fail(operator, "Auto root with specified NodeOrder")
-
-        auto_root = Node(shape.name("__auto_root__"))
-        auto_root.translation = Point()
-        auto_root.rotation = Quaternion()
-        shape.nodes.insert(0, auto_root)
-
-        for dangling_node in root_nodes:
-            dangling_node.parent = auto_root
-    elif "NodeOrder" in bpy.data.texts:
+    if "NodeOrder" in bpy.data.texts:
         order = bpy.data.texts["NodeOrder"].as_string().split("\n")
-        key = {name: i for i, name in enumerate(order)}
+        order_key = {name: i for i, name in enumerate(order)}
 
-        shape.nodes = list(sorted(shape.nodes, key=lambda n: key[n.name]))
+        shape.nodes = list(sorted(shape.nodes, key=lambda n: order_key[shape.names[n.name]]))
 
     node_indices = {}
 
@@ -190,9 +144,15 @@ def save(operator, context, filepath,
     node_lookup = {ob: node_indices[node] for ob, node in node_lookup.items()}
 
     # Now that we have all the nodes, attach our fabled objects to them
-    for bobj in scene_meshes:
+    scene_lods = {}
+    scene_objects = {}
+
+    for bobj in scene.objects:
+        if bobj.type != "MESH":
+            continue
+
         if bobj.users_group:
-            if len(bobj.users_group) >= 2:
+            if len(bobj.users_group) > 1:
                 print("Warning: Mesh {} is in multiple groups".format(bobj.name))
 
             lod_name = bobj.users_group[0].name
@@ -205,17 +165,28 @@ def save(operator, context, filepath,
             continue
 
         if bobj.location != Vector((0,0,0)) or bobj.scale != Vector((1,1,1)): # TODO: rotation
-            print("Warning: Object '{}' has transform that cannot export to DTS".format(bobj.name))
+            # TODO: apply transform to vertices instead maybe?
+            print("Warning: Mesh '{}' uses a local transform which cannot be exported to DTS".format(bobj.name))
 
-        # TODO: do something about the mesh translation/rotation as well
-        parent = get_parent_armature(bobj)
-        # parent = bobj.parent
+        if bobj.parent:
+            if bobj.parent not in node_lookup:
+                print("Warning: Mesh '{}' has a '{}' parent, ignoring".format(bobj.name, bobj.parent.type))
+                continue
 
-        if parent:
-            attach_node = node_lookup[parent]
+            attach_node = node_lookup[bobj.parent]
         else:
-            attach_node = 0 # 0 should be __auto_root__ if dangling
-                            # perhaps a good idea to assert here?
+            print("Warning: Mesh '{}' has no parent".format(bobj.name))
+
+            if not auto_root_index:
+                if "NodeOrder" in bpy.data.texts and "__auto_root__" not in order_key:
+                    return fail(operator, "Root meshes found, but NodeOrder has no __auto_root__")
+
+                auto_root_index = len(shape.nodes)
+                shape.nodes.append(Node(shape.name("__auto_root__")))
+                shape.default_rotations.append(Quaternion())
+                shape.default_translations.append(Vector())
+
+            attach_node = auto_root_index
 
         if lod_name not in scene_lods:
             match = re_lod_size.search(lod_name)
@@ -223,11 +194,11 @@ def save(operator, context, filepath,
             if match:
                 lod_size = int(match.group(1))
             else:
-                print("Warning: LOD {} does not end with a size, assuming size 32".format(lod_name))
+                print("Warning: LOD '{}' does not end with a size, assuming size 32".format(lod_name))
                 lod_size = 32 # setting?
 
             print("Creating LOD '{}' (size {})".format(lod_name, lod_size))
-            scene_lods[lod_name] = DetailLevel(name=shape.name(lod_name), subshape=0, objectDetail=-1, size=lod_size, polyCount=0)
+            scene_lods[lod_name] = DetailLevel(name=shape.name(lod_name), subshape=0, objectDetail=-1, size=lod_size)
             shape.detail_levels.append(scene_lods[lod_name])
 
         name = bobj.name
@@ -244,7 +215,7 @@ def save(operator, context, filepath,
         else:
             scene_objects[name][1][lod_name] = bobj
 
-    # Try to sort the detail levels? Maybe that fixes things?
+    # Sort detail levels
     shape.detail_levels.sort(key=attrgetter("size"), reverse=True)
 
     for i, lod in enumerate(shape.detail_levels):
@@ -286,23 +257,26 @@ def save(operator, context, filepath,
                 bm.to_mesh(mesh)
                 bm.free()
 
+                # This is the danger zone
+                # Data from down here may not stay around!
+
                 dmesh = Mesh()
                 shape.meshes.append(dmesh)
 
                 for vertex in mesh.vertices:
-                    dmesh.verts.append(Point(*vertex.co))
-                    dmesh.normals.append(Point(*vertex.normal))
+                    dmesh.verts.append(vertex.co.copy())
+                    dmesh.normals.append(vertex.normal.copy())
                     dmesh.enormals.append(0)
-                    dmesh.tverts.append(Point2D(0, 0))
+                    dmesh.tverts.append(Vector((0, 0)))
 
                 got_tvert = set()
 
-                dmesh.bounds = dmesh.calculate_bounds(Point(), Quaternion())
-                dmesh.center = Point(
+                dmesh.bounds = dmesh.calculate_bounds(Vector(), Quaternion())
+                dmesh.center = Vector((
                     (dmesh.bounds.min.x + dmesh.bounds.max.x) / 2,
                     (dmesh.bounds.min.y + dmesh.bounds.max.y) / 2,
-                    (dmesh.bounds.min.z + dmesh.bounds.max.z) / 2)
-                dmesh.radius = dmesh.calculate_radius(Point(), Quaternion(), dmesh.center)
+                    (dmesh.bounds.min.z + dmesh.bounds.max.z) / 2))
+                dmesh.radius = dmesh.calculate_radius(Vector(), Quaternion(), dmesh.center)
 
                 # Group all materials by their material_index
                 key = attrgetter("material_index")
@@ -323,13 +297,12 @@ def save(operator, context, filepath,
                     elif blank_material:
                         if blank_material_index is None:
                             blank_material_index = len(shape.materials)
-                            shape.materials.append(create_blank_material())
+                            shape.materials.append(Material(name="blank",
+                                flags=Material.SWrap | Material.TWrap | Material.NeverEnvMap))
 
                         flags |= blank_material_index & Primitive.MaterialMask
                     else:
                         flags |= Primitive.NoMaterial
-
-                    lod.polyCount += len(polys)
 
                     firstElement = len(dmesh.indices)
 
@@ -354,17 +327,17 @@ def save(operator, context, filepath,
 
                             for vert_index, loop_index in zip(poly.vertices, poly.loop_indices):
                                 vert = mesh.vertices[vert_index]
-                                dmesh.verts.append(Point(*vert.co))
+                                dmesh.verts.append(vert.co.copy())
                                 if use_face_normal:
-                                    dmesh.normals.append(Point(*poly.normal))
+                                    dmesh.normals.append(poly.normal.copy())
                                 else:
-                                    dmesh.normals.append(Point(*vert.normal))
+                                    dmesh.normals.append(vert.normal.copy())
                                 dmesh.enormals.append(0)
                                 if uv_layer:
                                     uv = uv_layer[loop_index].uv
-                                    dmesh.tverts.append(Point2D(uv.x, 1 - uv.y))
+                                    dmesh.tverts.append(Vector((uv.x, 1 - uv.y)))
                                 else:
-                                    dmesh.tverts.append(Point2D(0, 0))
+                                    dmesh.tverts.append(Vector((0, 0)))
                         else:
                             vertices = poly.vertices
 
@@ -372,7 +345,7 @@ def save(operator, context, filepath,
                                 for vert_index, loop_index in zip(vertices, poly.loop_indices):
                                     # TODO: split on multiple UV coords
                                     uv = uv_layer[loop_index].uv
-                                    dmesh.tverts[vert_index] = Point2D(uv.x, 1 - uv.y)
+                                    dmesh.tverts[vert_index] = Vector((uv.x, 1 - uv.y))
 
                         dmesh.indices.append(vertices[2])
                         dmesh.indices.append(vertices[1])
@@ -381,7 +354,7 @@ def save(operator, context, filepath,
                     numElements = len(dmesh.indices) - firstElement
                     dmesh.primitives.append(Primitive(firstElement, numElements, flags))
 
-                bpy.data.meshes.remove(mesh)
+                bpy.data.meshes.remove(mesh) # RIP!
 
                 # ??? ? ?? ???? ??? ?
                 dmesh.vertsPerFrame = len(dmesh.verts)
@@ -396,17 +369,18 @@ def save(operator, context, filepath,
 
     # Figure out all the things
     print("Computing bounds")
-    shape.smallest_size = None
-    shape.smallest_detail_level = -1
-
-    for i, lod in enumerate(shape.detail_levels):
-        if lod.size >= 0 and (shape.smallest_size == None or lod.size < shape.smallest_size):
-            shape.smallest_size = lod.size
-            shape.smallest_detail_level = i
+    # shape.smallest_size = None
+    # shape.smallest_detail_level = -1
+    #
+    # for i, lod in enumerate(shape.detail_levels):
+    #     if lod.size >= 0 and (shape.smallest_size == None or lod.size < shape.smallest_size):
+    #         shape.smallest_size = lod.size
+    #         shape.smallest_detail_level = i
 
     shape.bounds = Box(
-        Point( 10e30,  10e30,  10e30),
-        Point(-10e30, -10e30, -10e30))
+        Vector(( 10e30,  10e30,  10e30)),
+        Vector((-10e30, -10e30, -10e30)))
+
     shape.radius = 0
     shape.radius_tube = 0
 
@@ -431,12 +405,10 @@ def save(operator, context, filepath,
             shape.bounds.max.y = max(shape.bounds.max.y, bounds.max.y)
             shape.bounds.max.z = max(shape.bounds.max.z, bounds.max.z)
 
-    # shape.center = Point(
-    #     (shape.bounds.min.x + shape.bounds.max.x) / 2,
-    #     (shape.bounds.min.y + shape.bounds.max.y) / 2,
-    #     (shape.bounds.min.z + shape.bounds.max.z) / 2)
-
-    shape.center = Point()
+    shape.center = Vector((
+        (shape.bounds.min.x + shape.bounds.max.x) / 2,
+        (shape.bounds.min.y + shape.bounds.max.y) / 2,
+        (shape.bounds.min.z + shape.bounds.max.z) / 2))
 
     if debug_report:
         print("Writing debug report")

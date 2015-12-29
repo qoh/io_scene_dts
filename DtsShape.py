@@ -29,8 +29,6 @@ class DtsOutputStream(object):
 		self.sequence = self.sequence + 1
 
 	def flush(self, fd):
-		print("flush")
-
 		# Force all buffers to have a size multiple of 4 bytes
 		if len(self.buffer16) % 2 == 1: self.buffer16.append(0)
 		while len(self.buffer8) % 4 != 0: self.buffer8.append(0)
@@ -71,15 +69,15 @@ class DtsOutputStream(object):
 		self.write8(*string.encode("ascii"))
 		self.write8(0)
 
-	def write_point(self, point):
-		self.write_float(point.x, point.y, point.z)
+	def write_vec3(self, v):
+		self.write_float(v.x, v.y, v.z)
 
-	def write_point2d(self, point):
-		self.write_float(point.x, point.y)
+	def write_vec2(self, v):
+		self.write_float(v.x, v.y)
 
 	def write_box(self, box):
-		self.write_point(box.min)
-		self.write_point(box.max)
+		self.write_vec3(box.min)
+		self.write_vec3(box.max)
 
 	def write_quat(self, quat):
 		self.write16(
@@ -148,14 +146,14 @@ class DtsInputStream(object):
 				buffer.append(byte)
 		return "".join(map(chr, buffer))
 
-	def read_point(self):
-		return Point(self.read_float(), self.read_float(), self.read_float())
+	def read_vec3(self):
+		return Vector((self.read_float(), self.read_float(), self.read_float()))
 
-	def read_point2d(self):
-		return Point2D(self.read_float(), self.read_float())
+	def read_vec2(self):
+		return Vector((self.read_float(), self.read_float()))
 
 	def read_box(self):
-		return Box(self.read_point(), self.read_point())
+		return Box(self.read_vec3(), self.read_vec3())
 
 	def read_quat(self):
 		return Quaternion(
@@ -196,8 +194,8 @@ class DtsShape(object):
 		self.smallest_detail_level = 0
 		self.radius = 0.0
 		self.radius_tube = 0.0
-		self.center = Point(0.0, 0.0, 0.0)
-		self.bounds = Box(Point(0.0, 0.0, 0.0), Point(0.0, 0.0, 0.0))
+		self.center = Vector()
+		self.bounds = Box(Vector(), Vector())
 
 	def name(self, string):
 		index = self._names_lookup.get(string.lower())
@@ -216,7 +214,7 @@ class DtsShape(object):
 			nodeid = self.nodes[nodeid].parent
 			chain.append(nodeid)
 
-		trans = Point(0, 0, 0)
+		trans = Vector()
 		rot = Quaternion(0, 0, 0, 1)
 
 		for i in reversed(chain):
@@ -268,7 +266,7 @@ class DtsShape(object):
 
 		# Bounds
 		stream.write_float(self.radius, self.radius_tube)
-		stream.write_point(self.center)
+		stream.write_vec3(self.center)
 		stream.write_box(self.bounds)
 		stream.guard(1)
 
@@ -314,11 +312,11 @@ class DtsShape(object):
 
 		for i in range(len(self.nodes)):
 			stream.write_quat(self.default_rotations[i])
-			stream.write_point(self.default_translations[i])
+			stream.write_vec3(self.default_translations[i])
 
 		# Animation translations and rotations
 		for point in self.node_translations:
-			stream.write_point(point)
+			stream.write_vec3(point)
 		for quat in self.node_rotations:
 			stream.write_quat(quat)
 		stream.guard(8)
@@ -327,9 +325,9 @@ class DtsShape(object):
 		for point in self.node_scales_uniform:
 			stream.write_float(point)
 		for point in self.node_scales_aligned:
-			stream.write_point(point)
+			stream.write_vec3(point)
 		for point in self.node_scales_arbitrary:
-			stream.write_point(point)
+			stream.write_vec3(point)
 		# if dtsVersion >= 26:
 		for quat in self.node_scalerots_arbitrary:
 			stream.write_quat(quat)
@@ -338,7 +336,7 @@ class DtsShape(object):
 		# Ground transformations
 		assert len(self.ground_translations) == len(self.ground_rotations)
 		for point in self.ground_translations:
-			self.write_point(point)
+			self.write_vec3(point)
 		for quat in self.ground_rotations:
 			self.write_quat(quat)
 		stream.guard(10)
@@ -461,7 +459,7 @@ class DtsShape(object):
 		# Misc geometry properties
 		self.radius = stream.read_float()
 		self.radius_tube = stream.read_float()
-		self.center = stream.read_point()
+		self.center = stream.read_vec3()
 		self.bounds = stream.read_box()
 		stream.guard()
 
@@ -503,18 +501,18 @@ class DtsShape(object):
 
 		for i in range(n_node):
 			self.default_rotations[i] = stream.read_quat()
-			self.default_translations[i] = stream.read_point()
+			self.default_translations[i] = stream.read_vec3()
 
 		# Animation translations and rotations
-		self.node_translations = [stream.read_point() for i in range(n_nodetranslation)]
+		self.node_translations = [stream.read_vec3() for i in range(n_nodetranslation)]
 		self.node_rotations = [stream.read_quat() for i in range(n_noderotation)]
 		stream.guard()
 
 		# Default scales
 		if stream.dtsVersion > 21:
 			self.node_scales_uniform = [stream.read_float() for i in range(n_nodescaleuniform)]
-			self.node_scales_aligned = [stream.read_point() for i in range(n_nodescalealigned)]
-			self.node_scales_arbitrary = [stream.read_point() for i in range(n_nodescalearbitrary)]
+			self.node_scales_aligned = [stream.read_vec3() for i in range(n_nodescalealigned)]
+			self.node_scales_arbitrary = [stream.read_vec3() for i in range(n_nodescalearbitrary)]
 			self.node_scalerots_arbitrary = [stream.read_quat() for i in range(n_nodescalearbitrary)]
 			stream.guard()
 		else:
@@ -533,7 +531,7 @@ class DtsShape(object):
 
 		# Ground transformations
 		if stream.dtsVersion > 23:
-			self.ground_translations = [stream.read_point() for i in range(n_groundframe)]
+			self.ground_translations = [stream.read_vec3() for i in range(n_groundframe)]
 			self.ground_rotations = [stream.read_quat() for i in range(n_groundframe)]
 			stream.guard()
 		else:
