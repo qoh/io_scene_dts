@@ -108,8 +108,8 @@ def write_debug_report(filepath, shape):
         p("Meshes (" + str(len(shape.meshes)) + "):")
         for i, mesh in enumerate(shape.meshes):
             p("  Mesh " + str(i))
-            p("    type = " + mesh.get_type())
-            p("    flags = " + mesh.get_flags())
+            p("    type = " + str(mesh.get_type()))
+            p("    flags = " + str(mesh.get_flags()))
             p("    bounds = " + str(mesh.bounds))
             p("    center = " + str(mesh.center))
             p("    radius = " + str(mesh.radius))

@@ -337,7 +337,9 @@ class Mesh:
 		stream.write32(self.get_flags())
 		stream.guard()
 
-		if self.mtype != Mesh.StandardType:
+		mtype = self.get_type()
+
+		if mtype != Mesh.StandardType:
 			raise ValueError("cannot write non standard mesh")
 
 	def read_standard_mesh(self, stream):
