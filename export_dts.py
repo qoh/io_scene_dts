@@ -430,7 +430,7 @@ def save(operator, context, filepath,
         for j in range(0, obj.numMeshes):
             mesh = shape.meshes[obj.firstMesh + j]
 
-            if mesh.type == MeshType.Null:
+            if mesh.type == Mesh.NullType:
                 continue
 
             bounds = mesh.calculate_bounds(trans, rot)
