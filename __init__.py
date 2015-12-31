@@ -83,6 +83,24 @@ class ExportDTS(bpy.types.Operator, ExportHelper):
             default=True,
             )
 
+    never_split = BoolProperty(
+            name="Never split edges",
+            description="Optimize index count by ignoring flat shading",
+            default=False,
+            )
+
+    transform_mesh = BoolProperty(
+            name="Use mesh transforms",
+            description="Apply local location/rotation/scale to geometry",
+            default=True,
+            )
+
+    apply_modifiers = BoolProperty(
+            name="Apply modifiers",
+            description="Apply modifiers to meshes",
+            default=True,
+            )
+
     debug_report = BoolProperty(
         name="Write debug report",
         description="Dump out all the information from the DTS to a file",

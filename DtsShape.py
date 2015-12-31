@@ -25,7 +25,7 @@ class DtsOutputStream(object):
 			assert specific == self.sequence
 		self.write32(self.sequence)
 		self.write16(self.sequence)
-		self.write8(self.sequence)
+		self.write_u8(self.sequence)
 		self.sequence = self.sequence + 1
 
 	def flush(self, fd):
@@ -61,6 +61,10 @@ class DtsOutputStream(object):
 			assert -128 <= value <= 127
 			assert type(value) == int, "type is {}, must be {}".format(type(value), int)
 		self.buffer8.extend(values)
+
+	def write_u8(self, num):
+		assert 0 <= num <= 255, num
+		self.write8(unpack("b", pack("B", num))[0])
 
 	def write_float(self, *values):
 		self.write32(*map(lambda f: unpack("i", pack("f", f))[0], values))

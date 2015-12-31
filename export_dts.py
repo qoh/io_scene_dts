@@ -141,8 +141,17 @@ def array_from_fcurves(curves, data_path, array_size):
     if found:
         return tuple(array)
 
+def transform_co(ob, co):
+    return ob.matrix_world * co
+
+def transform_normal(ob, normal):
+    return (ob.matrix_world.to_3x3() * normal).normalized()
+
 def save(operator, context, filepath,
          blank_material=True,
+         never_split=False,
+         apply_modifiers=True,
+         transform_mesh=True,
          debug_report=True):
     print("Exporting scene to DTS")
 
@@ -203,10 +212,6 @@ def save(operator, context, filepath,
 
         if lod_name == "__ignore__":
             continue
-
-        if bobj.location != Vector((0,0,0)) or bobj.scale != Vector((1,1,1)): # TODO: rotation
-            # TODO: apply transform to vertices instead maybe?
-            print("Warning: Mesh '{}' uses a local transform which cannot be exported to DTS".format(bobj.name))
 
         if bobj.parent:
             if bobj.parent not in node_lookup:
@@ -290,7 +295,7 @@ def save(operator, context, filepath,
                 #########################
                 ### Welcome to complexity
 
-                mesh = bobj.to_mesh(scene, False, "PREVIEW")
+                mesh = bobj.to_mesh(scene, apply_modifiers, "PREVIEW")
                 bm = bmesh.new()
                 bm.from_mesh(mesh)
                 bmesh.ops.triangulate(bm, faces=bm.faces)
@@ -304,8 +309,14 @@ def save(operator, context, filepath,
                 shape.meshes.append(dmesh)
 
                 for vertex in mesh.vertices:
-                    dmesh.verts.append(vertex.co.copy())
-                    dmesh.normals.append(vertex.normal.copy())
+                    if transform_mesh:
+                        dmesh.verts.append(transform_co(bobj, vertex.co))
+                    else:
+                        dmesh.verts.append(vertex.co.copy())
+                    if transform_mesh:
+                        dmesh.verts.append(transform_normal(bobj, vertex.normal))
+                    else:
+                        dmesh.normals.append(vertex.normal.copy())
                     dmesh.enormals.append(0)
                     dmesh.tverts.append(Vector((0, 0)))
 
@@ -362,17 +373,26 @@ def save(operator, context, filepath,
                                     needs_split = True
                                     break
 
-                        if needs_split: # TODO: verify that this works properly
+                        if needs_split and not never_split: # TODO: verify that this works properly
                             vertices = tuple(range(len(dmesh.verts), len(dmesh.verts) + len(poly.vertices)))
 
                             for vert_index, loop_index in zip(poly.vertices, poly.loop_indices):
                                 vert = mesh.vertices[vert_index]
-                                dmesh.verts.append(vert.co.copy())
+
                                 if use_face_normal:
-                                    dmesh.normals.append(poly.normal.copy())
+                                    normal = poly.normal.copy()
                                 else:
-                                    dmesh.normals.append(vert.normal.copy())
+                                    normal = vert.normal.copy()
+
+                                if transform_mesh:
+                                    dmesh.verts.append(transform_co(bobj, vert.co))
+                                    dmesh.normals.append(transform_normal(bobj, normal))
+                                else:
+                                    dmesh.verts.append(vert.co.copy())
+                                    dmesh.normals.append(normal.copy())
+
                                 dmesh.enormals.append(0)
+
                                 if uv_layer:
                                     uv = uv_layer[loop_index].uv
                                     dmesh.tverts.append(Vector((uv.x, 1 - uv.y)))
@@ -619,3 +639,29 @@ def save(operator, context, filepath,
         shape.save(fd)
 
     return {"FINISHED"}
+
+"""
+def save(operator, context, filepath,
+         blank_material=True,
+         debug_report=True):
+  shape = DtsShape()
+
+  mesh = Mesh(Mesh.StandardType)
+  shape.meshes.append(mesh)
+
+  for i in range(512):
+    shape.objects.append(Object(shape.name("obj" + str(i)), numMeshes=1, firstMesh=0, node=0))
+    shape.objectstates.append(ObjectState(1.0, 0, 0))
+
+  shape.nodes.append(Node(shape.name("root")))
+  shape.default_translations.append(Vector())
+  shape.default_rotations.append(Quaternion())
+
+  shape.detail_levels.append(DetailLevel(name=shape.name("detail32"), subshape=0, objectDetail=0, size=32))
+  shape.subshapes.append(Subshape(firstNode=0, firstObject=0, firstDecal=0, numNodes=len(shape.nodes), numObjects=len(shape.objects), numDecals=0))
+
+  shape.verify()
+  write_debug_report(filepath + ".txt", shape)
+  with open(filepath, "wb") as fd:
+    shape.save(fd)
+"""
