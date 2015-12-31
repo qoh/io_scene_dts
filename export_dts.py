@@ -314,7 +314,7 @@ def save(operator, context, filepath,
                     else:
                         dmesh.verts.append(vertex.co.copy())
                     if transform_mesh:
-                        dmesh.verts.append(transform_normal(bobj, vertex.normal))
+                        dmesh.normals.append(transform_normal(bobj, vertex.normal))
                     else:
                         dmesh.normals.append(vertex.normal.copy())
                     dmesh.enormals.append(0)
