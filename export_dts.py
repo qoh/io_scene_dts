@@ -1,4 +1,5 @@
 import bpy, bmesh
+import mathutils
 from mathutils import Matrix, Euler
 from math import sqrt, pi
 from operator import attrgetter
@@ -517,6 +518,8 @@ def save(operator, context, filepath,
             sequence_missing.add(name)
 
     for name, markers in sequences.items():
+        print("Exporting sequence", name)
+
         if "start" not in markers:
             return fail(operator, "Missing start marker for sequence '{}'".format(name))
 
@@ -581,13 +584,14 @@ def save(operator, context, filepath,
             index = node_lookup[ob]
             fcurves = ob.animation_data.action.fcurves
 
-            curves_rotation = array_from_fcurves(fcurves, "rotation_euler", 3)
+            curves_rotation_quaternion = array_from_fcurves(fcurves, "rotation_quaternion", 4)
+            curves_rotation_euler = array_from_fcurves(fcurves, "rotation_euler", 3)
             curves_translation = array_from_fcurves(fcurves, "location", 3)
             curves_scale = array_from_fcurves(fcurves, "scale", 3)
 
-            if curves_rotation:
+            if curves_rotation_quaternion or curves_rotation_euler:
                 print("rotation matters for", ob.name)
-                seq_curves_rotation.append(curves_rotation)
+                seq_curves_rotation.append((curves_rotation_quaternion, curves_rotation_euler))
                 seq.rotationMatters[index] = True
 
             if curves_translation:
@@ -613,9 +617,13 @@ def save(operator, context, filepath,
 
             frame_current = min(frame_end, frame_current + frame_step)
 
-        for curves in seq_curves_rotation:
+        for (quaternion, euler) in seq_curves_rotation:
             for frame in frame_indices:
-                r = Euler(evaluate_all(curves, frame), "XYZ").to_quaternion()
+                r = mathutils.Quaternion()
+                if quaternion:
+                    r *= mathutils.Quaternion(evaluate_all(quaternion, frame))
+                if euler:
+                    r *= Euler(evaluate_all(euler, frame), "XYZ").to_quaternion()
                 shape.node_rotations.append(Quaternion(r[1], r[2], r[3], -r[0]))
 
         for curves in seq_curves_translation:
