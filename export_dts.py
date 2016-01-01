@@ -142,6 +142,15 @@ def array_from_fcurves(curves, data_path, array_size):
     if found:
         return tuple(array)
 
+def fcurves_keyframe_in_range(curves, start, end):
+    for curve in curves:
+        for keyframe in curve.keyframe_points:
+            frame = keyframe.co[0]
+            if frame >= start and frame <= end:
+                return True
+
+    return False
+
 def transform_co(ob, co):
     return ob.matrix_world * co
 
@@ -153,6 +162,7 @@ def save(operator, context, filepath,
          never_split=False,
          apply_modifiers=True,
          transform_mesh=True,
+         sloppy=False,
          debug_report=True):
     print("Exporting scene to DTS")
 
@@ -174,7 +184,13 @@ def save(operator, context, filepath,
         try:
             shape.nodes = list(sorted(shape.nodes, key=lambda n: order_key[shape.names[n.name]]))
         except KeyError as e:
-            return fail(operator, "Node '{}' is missing from 'NodeOrder'".format(e.args[0]))
+            return fail(operator, "Node '{}' is missing from the 'NodeOrder' text block. This means that you may have added nodes to a skeleton when you shouldn't have, or that you forgot to remove the 'NodeOrder' text block.".format(e.args[0]))
+
+        shape_node_names = set(map(lambda n: shape.names[n.name], shape.nodes))
+        missing_nodes = tuple(filter(lambda n: n not in shape_node_names, order))
+
+        if missing_nodes:
+            return fail(operator, "The following nodes were found in the 'NodeOrder' text block but do not exist in the shape. This means that you may have removed nodes from a skeleton when you shouldn't have, or that you forgot to remove the 'NodeOrder' text block:\n{}".format(", ".join(missing_nodes)))
 
     node_indices = {}
 
@@ -216,8 +232,11 @@ def save(operator, context, filepath,
 
         if bobj.parent:
             if bobj.parent not in node_lookup:
-                print("Warning: Mesh '{}' has a '{}' parent, ignoring".format(bobj.name, bobj.parent.type))
-                continue
+                if sloppy:
+                    print("Warning: Mesh '{}' has a '{}' parent, ignoring".format(bobj.name, bobj.parent.type))
+                    continue
+                else:
+                    return fail(operator, "The mesh '{}' has a parent of type '{}' (named '{}'). You can only parent meshes to empties/armatures, not other meshes.")
 
             attach_node = node_lookup[bobj.parent]
         else:
@@ -584,22 +603,27 @@ def save(operator, context, filepath,
             index = node_lookup[ob]
             fcurves = ob.animation_data.action.fcurves
 
-            curves_rotation_quaternion = array_from_fcurves(fcurves, "rotation_quaternion", 4)
-            curves_rotation_euler = array_from_fcurves(fcurves, "rotation_euler", 3)
+            if ob.rotation_mode == "QUATERNION":
+                curves_rotation = array_from_fcurves(fcurves, "rotation_quaternion", 4)
+            elif ob.rotation_mode == "XYZ":
+                curves_rotation = array_from_fcurves(fcurves, "rotation_euler", 3)
+            else:
+                return fail(operator, "Animated node '{}' uses unsupported rotation_mode '{}'".format(ob.name, ob.rotation_mode))
+
             curves_translation = array_from_fcurves(fcurves, "location", 3)
             curves_scale = array_from_fcurves(fcurves, "scale", 3)
 
-            if curves_rotation_quaternion or curves_rotation_euler:
+            if curves_rotation and fcurves_keyframe_in_range(curves_rotation, frame_start, frame_end):
                 print("rotation matters for", ob.name)
-                seq_curves_rotation.append((curves_rotation_quaternion, curves_rotation_euler))
+                seq_curves_rotation.append((curves_rotation, ob.rotation_mode))
                 seq.rotationMatters[index] = True
 
-            if curves_translation:
+            if curves_translation and fcurves_keyframe_in_range(curves_translation, frame_start, frame_end):
                 print("translation matters for", ob.name)
                 seq_curves_translation.append(curves_translation)
                 seq.translationMatters[index] = True
 
-            if curves_scale:
+            if curves_scale and fcurves_keyframe_in_range(curves_scale, frame_start, frame_end):
                 print("scale matters for", ob.name)
                 seq_curves_scale.append(curves_scale)
                 seq.scaleMatters[index] = True
@@ -617,13 +641,14 @@ def save(operator, context, filepath,
 
             frame_current = min(frame_end, frame_current + frame_step)
 
-        for (quaternion, euler) in seq_curves_rotation:
+        for (curves, mode) in seq_curves_rotation:
             for frame in frame_indices:
-                r = mathutils.Quaternion()
-                if quaternion:
-                    r *= mathutils.Quaternion(evaluate_all(quaternion, frame))
-                if euler:
-                    r *= Euler(evaluate_all(euler, frame), "XYZ").to_quaternion()
+                if mode == "QUATERNION":
+                    r = evaluate_all(curves, frame)
+                elif mode == "XYZ":
+                    r = Euler(evaluate_all(curves, frame), "XYZ").to_quaternion()
+                else:
+                    assert false, "unknown rotation_mode after finding matters"
                 shape.node_rotations.append(Quaternion(r[1], r[2], r[3], -r[0]))
 
         for curves in seq_curves_translation:
@@ -647,29 +672,3 @@ def save(operator, context, filepath,
         shape.save(fd)
 
     return {"FINISHED"}
-
-"""
-def save(operator, context, filepath,
-         blank_material=True,
-         debug_report=True):
-  shape = DtsShape()
-
-  mesh = Mesh(Mesh.StandardType)
-  shape.meshes.append(mesh)
-
-  for i in range(512):
-    shape.objects.append(Object(shape.name("obj" + str(i)), numMeshes=1, firstMesh=0, node=0))
-    shape.objectstates.append(ObjectState(1.0, 0, 0))
-
-  shape.nodes.append(Node(shape.name("root")))
-  shape.default_translations.append(Vector())
-  shape.default_rotations.append(Quaternion())
-
-  shape.detail_levels.append(DetailLevel(name=shape.name("detail32"), subshape=0, objectDetail=0, size=32))
-  shape.subshapes.append(Subshape(firstNode=0, firstObject=0, firstDecal=0, numNodes=len(shape.nodes), numObjects=len(shape.objects), numDecals=0))
-
-  shape.verify()
-  write_debug_report(filepath + ".txt", shape)
-  with open(filepath, "wb") as fd:
-    shape.save(fd)
-"""
