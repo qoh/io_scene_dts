@@ -1,9 +1,21 @@
 from collections import namedtuple
 from struct import pack, unpack
 from enum import Enum
-import mathutils
-from mathutils import Vector
+
 import math
+
+try:
+	import mathutils
+	from mathutils import Vector
+except ImportError:
+	class Vector:
+		def __init(self, v=None):
+			if v == None:
+				self.x = 0
+				self.y = 0
+				self.z = 0
+			else:
+				self.x, self.y, self.z = v
 
 def bit(n):
 	return 1 << n
@@ -469,6 +481,7 @@ class Sequence:
 	def __init__(self):
 		# todo: get rid of this
 		self.nameIndex = -1
+		self.name = None
 		self.flags = 0
 		self.numKeyframes = 0
 		self.duration = 0
@@ -493,8 +506,9 @@ class Sequence:
 		self.frameMatters = []
 		self.matFrameMatters = []
 
-	def write(self, fd):
-		fd.write(pack("<i", self.nameIndex))
+	def write(self, fd, writeIndex=True):
+		if writeIndex:
+			fd.write(pack("<i", self.nameIndex))
 		fd.write(pack("<I", self.flags))
 		fd.write(pack("<i", self.numKeyframes))
 		fd.write(pack("<f", self.duration))
@@ -526,10 +540,11 @@ class Sequence:
 		return unpack(str(numWords) + "i", fd.read(4 * numWords))
 
 	@classmethod
-	def read(cls, fd):
+	def read(cls, fd, readIndex=True):
 		seq = cls()
 
-		seq.nameIndex = unpack("i", fd.read(4))[0]
+		if readIndex:
+			seq.nameIndex = unpack("i", fd.read(4))[0]
 		seq.flags = unpack("I", fd.read(4))[0]
 		seq.numKeyframes = unpack("i", fd.read(4))[0]
 		seq.duration = unpack("f", fd.read(4))[0]

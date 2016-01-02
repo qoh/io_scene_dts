@@ -628,8 +628,6 @@ def save(operator, context, filepath,
                 seq_curves_scale.append(curves_scale)
                 seq.scaleMatters[index] = True
 
-            seq.translationMatters[index] = True
-
         frame_indices = []
         frame_current = frame_start
 

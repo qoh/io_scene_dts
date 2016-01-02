@@ -16,6 +16,8 @@ if "bpy" in locals():
         importlib.reload(import_dts)
     if "export_dts" in locals():
         importlib.reload(export_dts)
+    if "export_dsq" in locals():
+        importlib.reload(export_dsq)
 
 
 import bpy
@@ -114,23 +116,54 @@ class ExportDTS(bpy.types.Operator, ExportHelper):
         keywords = self.as_keywords(ignore=("check_existing", "filter_glob"))
         return export_dts.save(self, context, **keywords)
 
+class ExportDSQ(bpy.types.Operator, ExportHelper):
+    """Save many Torque DSQ Files"""
+
+    bl_idname = "export_scene.dsq"
+    bl_label = 'Export DSQ'
+    bl_options = {'PRESET'}
+
+    filename_ext = ".dsq"
+    filter_glob = StringProperty(
+            default="*.dsq",
+            options={'HIDDEN'},
+            )
+
+    # use_selection = BoolProperty(
+    #         name="Selection Only",
+    #         description="Export selected objects only",
+    #         default=False,
+    #         )
+
+    check_extension = True
+
+    def execute(self, context):
+        from . import export_dsq
+        keywords = self.as_keywords(ignore=("check_existing", "filter_glob"))
+        return export_dsq.save(self, context, **keywords)
+
 def menu_func_import(self, context):
     self.layout.operator(ImportDTS.bl_idname, text="Torque (.dts)")
 
-def menu_func_export(self, context):
+def menu_func_export_dts(self, context):
     self.layout.operator(ExportDTS.bl_idname, text="Torque (.dts)")
+
+def menu_func_export_dsq(self, context):
+    self.layout.operator(ExportDSQ.bl_idname, text="Torque Sequences (.dsq)")
 
 def register():
     bpy.utils.register_module(__name__)
 
     bpy.types.INFO_MT_file_import.append(menu_func_import)
-    bpy.types.INFO_MT_file_export.append(menu_func_export)
+    bpy.types.INFO_MT_file_export.append(menu_func_export_dts)
+    bpy.types.INFO_MT_file_export.append(menu_func_export_dsq)
 
 def unregister():
     bpy.utils.unregister_module(__name__)
 
     bpy.types.INFO_MT_file_import.remove(menu_func_import)
-    bpy.types.INFO_MT_file_export.remove(menu_func_export)
+    bpy.types.INFO_MT_file_export.remove(menu_func_export_dts)
+    bpy.types.INFO_MT_file_export.remove(menu_func_export_dsq)
 
 if __name__ == "__main__":
     register()
