@@ -48,6 +48,12 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
         default=False,
         )
 
+    skeleton_only = BoolProperty(
+            name="Skeleton only",
+            description="Do not import any meshes, only the nodes",
+            default=False,
+            )
+
     debug_report = BoolProperty(
         name="Write debug report",
         description="Dump out all the information from the DTS to a file",
