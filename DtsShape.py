@@ -90,6 +90,13 @@ class DtsOutputStream(object):
 			int(quat.z * 32767.0),
 			int(quat.w * 32767.0))
 
+	def write_blend_quat(self, quat):
+		self.write16(
+			int(quat.x *  32767),
+			int(quat.y *  32767),
+			int(quat.z *  32767),
+			int(quat.w * -32767))
+
 class DtsInputStream(object):
 	def __init__(self, fd):
 		self.sequence = 0
@@ -165,6 +172,13 @@ class DtsInputStream(object):
 			self.read16() / 32767.0,
 			self.read16() / 32767.0,
 			self.read16() / 32767.0)
+
+	def read_blend_quat(self):
+		x = self.read16() /  32767
+		y = self.read16() /  32767
+		z = self.read16() /  32767
+		w = self.read16() / -32767
+		return mathutils.Quaternion((w, x, y, z))
 
 class DtsShape(object):
 	def __init__(self):

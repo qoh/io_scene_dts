@@ -74,16 +74,6 @@ def export_material(mat, shape):
 
     return material_index
 
-def rotation_from_ob(ob):
-    if ob.rotation_mode == "QUATERNION":
-        r = ob.rotation_quaternion
-    elif ob.rotation_mode == "AXIS_ANGLE":
-        print("Warning: '{}' uses unsupported axis angle rotation".format(ob.name))
-        r = ob.rotation_quaternion # ob.rotation_axis_angle
-    else:
-        r = ob.rotation_euler.to_quaternion()
-    return Quaternion(r[1], r[2], r[3], -r[0])
-
 def eksi_bone_zone(shape, bones, parent):
     for bone in bones:
         node = Node(shape.name(bone.name), parent)
@@ -109,13 +99,15 @@ def export_bones(lookup, shape, bones, parent=-1):
 def export_all_nodes(lookup, shape, obs, parent=-1):
     for ob in obs:
         if ob.type == "ARMATURE" or ob.type == "EMPTY":
-            if ob.scale != Vector((1,1,1)):
+            loc, rot, scale = ob.matrix_local.decompose()
+
+            if scale != Vector((1, 1, 1)):
                 print("Warning: '{}' uses scale, which cannot be export to DTS nodes".format(ob.name))
 
             node = Node(shape.name(ob.name), parent)
             node.bl_ob = ob
-            node.translation = ob.location
-            node.rotation = rotation_from_ob(ob)
+            node.translation = loc
+            node.rotation = Quaternion(rot[1], rot[2], rot[3], -rot[0])
             shape.nodes.append(node)
             lookup[ob] = node
 
