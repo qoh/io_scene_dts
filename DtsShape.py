@@ -25,7 +25,7 @@ class DtsOutputStream(object):
 
 	def guard(self, specific=None):
 		if specific != None:
-			assert specific == self.sequence32.value
+			assert c_int(specific).value == self.sequence32.value
 		self.write32(self.sequence32.value)
 		self.write16(self.sequence16.value)
 		self.write8(self.sequence8.value)
