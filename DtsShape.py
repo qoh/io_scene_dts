@@ -70,7 +70,7 @@ class DtsOutputStream(object):
 		self.write32(*map(lambda f: unpack("i", pack("f", f))[0], values))
 
 	def write_string(self, string):
-		self.write8(*string.encode("ascii"))
+		self.write8(*string.encode("cp1252"))
 		self.write8(0)
 
 	def write_vec3(self, v):
@@ -407,7 +407,7 @@ class DtsShape(object):
 			else:
 				ws(fd, "b", len(mat.name))
 
-			fd.write(mat.name.encode("ascii"))
+			fd.write(mat.name.encode("cp1252"))
 		for mat in self.materials:
 			ws(fd, "i", mat.flags)
 		for mat in self.materials:
@@ -609,7 +609,7 @@ class DtsShape(object):
 			else:
 				length = unpack("B", fd.read(1))[0]
 
-			self.materials[i].name = fd.read(length).decode("ascii")
+			self.materials[i].name = fd.read(length).decode("cp1252")
 
 		for i in range(n_material):
 			self.materials[i].flags = unpack("I", fd.read(4))[0]

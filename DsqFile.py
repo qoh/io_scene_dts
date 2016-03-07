@@ -70,7 +70,7 @@ class DsqFile:
 
     def write_name(self, fd, name):
         write(fd, "<i", len(name))
-        fd.write(name.encode("ascii"))
+        fd.write(name.encode("cp1252"))
 
     def write(self, fd, version=24):
         write(fd, "<i", version)
@@ -132,7 +132,7 @@ class DsqFile:
 
     def read_name(self, fd):
         (size,) = read(fd, "<i")
-        return fd.read(size).decode("ascii")
+        return fd.read(size).decode("cp1252")
 
     def read(self, fd):
         (version,) = read(fd, "<i")
