@@ -56,6 +56,12 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
             default=False,
             )
 
+    import_node_order = BoolProperty(
+            name="Import node order",
+            description="Creates the NodeOrder text block for compatibility with existing DSQ files for this skeleton",
+            default=False,
+            )
+
     import_sequences = BoolProperty(
             name="Import sequences",
             description="Automatically add keyframes for embedded sequences",
@@ -126,7 +132,7 @@ class ExportDTS(bpy.types.Operator, ExportHelper):
     transform_mesh = BoolProperty(
             name="Use mesh transforms",
             description="Apply local location/rotation/scale to geometry",
-            default=True,
+            default=False,
             )
 
     apply_modifiers = BoolProperty(
@@ -204,4 +210,3 @@ def unregister():
 
 if __name__ == "__main__":
     register()
-

@@ -90,10 +90,10 @@ class DtsOutputStream(object):
 
 	def write_quat(self, quat):
 		self.write16(
-			int(quat.x * 32767.0),
-			int(quat.y * 32767.0),
-			int(quat.z * 32767.0),
-			int(quat.w * 32767.0))
+			c_short(int(quat.x * 32767.0)).value,
+			c_short(int(quat.y * 32767.0)).value,
+			c_short(int(quat.z * 32767.0)).value,
+			c_short(int(quat.w * 32767.0)).value)
 
 	def write_blend_quat(self, quat):
 		self.write16(

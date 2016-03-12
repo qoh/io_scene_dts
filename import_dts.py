@@ -177,6 +177,7 @@ def load(operator, context, filepath,
          node_mode="EMPTY",
          hide_default_player=False,
          skeleton_only=False,
+         import_node_order=False,
          import_sequences=True,
          debug_report=False):
     shape = DtsShape()
@@ -211,12 +212,13 @@ def load(operator, context, filepath,
     for lod in shape.detail_levels:
         lod_by_mesh[lod.objectDetail] = lod
 
-    if "NodeOrder" in bpy.data.texts:
-        order_buf = bpy.data.texts["NodeOrder"]
-    else:
-        order_buf = bpy.data.texts.new("NodeOrder")
+    if import_node_order:
+        if "NodeOrder" in bpy.data.texts:
+            order_buf = bpy.data.texts["NodeOrder"]
+        else:
+            order_buf = bpy.data.texts.new("NodeOrder")
 
-    order_buf.from_string("\n".join(shape.names[node.name] for node in shape.nodes))
+        order_buf.from_string("\n".join(shape.names[node.name] for node in shape.nodes))
 
     node_obs = []
     node_obs_val = {}
