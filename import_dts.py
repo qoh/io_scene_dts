@@ -384,14 +384,20 @@ def load(operator, context, filepath,
                 bpy.data.groups[lod_name].objects.link(bobj)
 
     # Import a bounds mesh
-    # me = bpy.data.meshes.new("Mesh")
-    # me.vertices.add(6)
-    # me.vertices[0].co = (
-    #     shape.center.x - shape.bounds.min.x,
-    #     shape.center.y - shape.bounds.min.y,
-    #     shape.center.z - shape.bounds.min.z)
-    # ob = bpy.data.objects.new("bounds", me)
-    # ob.draw_type = "BOUNDS"
-    # context.scene.objects.link(ob)
+    me = bpy.data.meshes.new("Mesh")
+    me.vertices.add(8)
+    me.vertices[0].co = (shape.bounds.min.x, shape.bounds.min.y, shape.bounds.min.z)
+    me.vertices[1].co = (shape.bounds.max.x, shape.bounds.min.y, shape.bounds.min.z)
+    me.vertices[2].co = (shape.bounds.max.x, shape.bounds.max.y, shape.bounds.min.z)
+    me.vertices[3].co = (shape.bounds.min.x, shape.bounds.max.y, shape.bounds.min.z)
+    me.vertices[4].co = (shape.bounds.min.x, shape.bounds.min.y, shape.bounds.max.z)
+    me.vertices[5].co = (shape.bounds.max.x, shape.bounds.min.y, shape.bounds.max.z)
+    me.vertices[6].co = (shape.bounds.max.x, shape.bounds.max.y, shape.bounds.max.z)
+    me.vertices[7].co = (shape.bounds.min.x, shape.bounds.max.y, shape.bounds.max.z)
+    me.validate()
+    me.update()
+    ob = bpy.data.objects.new("bounds", me)
+    ob.draw_type = "BOUNDS"
+    context.scene.objects.link(ob)
 
     return {"FINISHED"}

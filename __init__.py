@@ -14,6 +14,8 @@ if "bpy" in locals():
     import importlib
     if "import_dts" in locals():
         importlib.reload(import_dts)
+    if "import_dsq" in locals():
+        importlib.reload(import_dsq)
     if "export_dts" in locals():
         importlib.reload(export_dts)
     if "export_dsq" in locals():
@@ -65,6 +67,24 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
 
         keywords = self.as_keywords(ignore=("filter_glob", "split_mode"))
         return import_dts.load(self, context, **keywords)
+
+class ImportDSQ(bpy.types.Operator, ImportHelper):
+    """Load a Torque DSQ File"""
+    bl_idname = "import_scene.dsq"
+    bl_label = "Import DSQ"
+    bl_options = {'PRESET', 'UNDO'}
+
+    filename_ext = ".dsq"
+    filter_glob = StringProperty(
+            default="*.dsq",
+            options={'HIDDEN'},
+            )
+
+    def execute(self, context):
+        from . import import_dsq
+
+        keywords = self.as_keywords(ignore=("filter_glob", "split_mode"))
+        return import_dsq.load(self, context, **keywords)
 
 class ExportDTS(bpy.types.Operator, ExportHelper):
     """Save a Torque DTS File"""
@@ -148,8 +168,11 @@ class ExportDSQ(bpy.types.Operator, ExportHelper):
         keywords = self.as_keywords(ignore=("check_existing", "filter_glob"))
         return export_dsq.save(self, context, **keywords)
 
-def menu_func_import(self, context):
+def menu_func_import_dts(self, context):
     self.layout.operator(ImportDTS.bl_idname, text="Torque (.dts)")
+
+def menu_func_import_dsq(self, context):
+    self.layout.operator(ImportDSQ.bl_idname, text="Torque Sequences (.dsq)")
 
 def menu_func_export_dts(self, context):
     self.layout.operator(ExportDTS.bl_idname, text="Torque (.dts)")
@@ -160,19 +183,19 @@ def menu_func_export_dsq(self, context):
 def register():
     bpy.utils.register_module(__name__)
 
-    bpy.types.INFO_MT_file_import.append(menu_func_import)
+    bpy.types.INFO_MT_file_import.append(menu_func_import_dts)
+    bpy.types.INFO_MT_file_import.append(menu_func_import_dsq)
     bpy.types.INFO_MT_file_export.append(menu_func_export_dts)
     bpy.types.INFO_MT_file_export.append(menu_func_export_dsq)
 
 def unregister():
     bpy.utils.unregister_module(__name__)
 
-    bpy.types.INFO_MT_file_import.remove(menu_func_import)
+    bpy.types.INFO_MT_file_import.remove(menu_func_import_dts)
+    bpy.types.INFO_MT_file_import.remove(menu_func_import_dsq)
     bpy.types.INFO_MT_file_export.remove(menu_func_export_dts)
     bpy.types.INFO_MT_file_export.remove(menu_func_export_dsq)
 
 if __name__ == "__main__":
     register()
 
-import os
-print(os.path.realpath(__file__))

@@ -70,6 +70,10 @@ def export_material(mat, shape):
         shape.iflmaterials.append(ifl)
 
     material = Material(name=mat.name, flags=flags)
+
+    if "texture" in mat:
+      material.name = mat["texture"]
+
     shape.materials.append(material)
 
     return material_index
@@ -213,9 +217,17 @@ def save(operator, context, filepath,
     scene_lods = {}
     scene_objects = {}
 
+    bounds_ob = None
+
     for bobj in scene.objects:
         if bobj.type != "MESH":
             continue
+
+        if bobj.name.lower() == "bounds":
+          if bounds_ob:
+            print("Warning: Multiple 'bounds' objects found - check capitalization")
+          bounds_ob = bobj
+          continue
 
         if bobj.users_group:
             if len(bobj.users_group) > 1:
@@ -484,6 +496,10 @@ def save(operator, context, filepath,
             shape.bounds.max.x = max(shape.bounds.max.x, bounds.max.x)
             shape.bounds.max.y = max(shape.bounds.max.y, bounds.max.y)
             shape.bounds.max.z = max(shape.bounds.max.z, bounds.max.z)
+
+    # Is there a bounds mesh? Use that instead.
+    if bounds_ob:
+      shape.bounds = Box(Vector(bounds_ob.bound_box[0]), Vector(bounds_ob.bound_box[6]))
 
     shape.center = Vector((
         (shape.bounds.min.x + shape.bounds.max.x) / 2,

@@ -9,7 +9,7 @@ try:
 	from mathutils import Vector
 except ImportError:
 	class Vector:
-		def __init(self, v=None):
+		def __init__(self, v=None):
 			if v == None:
 				self.x = 0
 				self.y = 0

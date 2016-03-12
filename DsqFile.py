@@ -140,7 +140,6 @@ class DsqFile:
 
         (num_nodes,) = read(fd, "<i")
         self.nodes = [self.read_name(fd) for i in range(num_nodes)]
-        print("nodes", self.nodes)
 
         # Legacy data
         read(fd, "<i") # sz
@@ -175,15 +174,15 @@ class DsqFile:
         (num_seqs,) = read(fd, "<i")
         self.sequences = [None] * num_seqs
         for i in range(num_seqs):
-            self.sequences[i] = Sequence()
-            self.sequences[i].name = self.read_name(fd)
-            self.sequences[i].read(fd, False)
+            name = self.read_name(fd)
+            self.sequences[i] = Sequence.read(fd, False)
+            self.sequences[i].name = name
 
         # and finally, triggers
         if version > 8:
             (num_sjws,) = read(fd, "<i")
             self.triggers = [None] * num_sjws
             for i in range(num_sjws):
-                self.triggers[i] = Trigger()
+                self.triggers[i] = Trigger(0, 0)
                 self.triggers[i].state = read(fd, "<i")
                 self.triggers[i].pos = read(fd, "<f")
