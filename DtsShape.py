@@ -1,5 +1,6 @@
 from struct import pack, unpack, calcsize
 from array import array
+from ctypes import c_byte, c_short, c_int
 
 from .DtsTypes import *
 
@@ -15,18 +16,22 @@ class DtsOutputStream(object):
 	def __init__(self, dtsVersion=24, exporterVersion=0):
 		self.dtsVersion = dtsVersion
 		self.exporterVersion = exporterVersion
-		self.sequence = 0
+		self.sequence32 = c_int(0)
+		self.sequence16 = c_short(0)
+		self.sequence8  = c_byte(0)
 		self.buffer32 = []
 		self.buffer16 = []
 		self.buffer8  = []
 
 	def guard(self, specific=None):
 		if specific != None:
-			assert specific == self.sequence
-		self.write32(self.sequence)
-		self.write16(self.sequence)
-		self.write_u8(self.sequence)
-		self.sequence = self.sequence + 1
+			assert c_int(specific).value == self.sequence32.value
+		self.write32(self.sequence32.value)
+		self.write16(self.sequence16.value)
+		self.write8(self.sequence8.value)
+		self.sequence32.value += 1
+		self.sequence16.value += 1
+		self.sequence8.value += 1
 
 	def flush(self, fd):
 		# Force all buffers to have a size multiple of 4 bytes
@@ -70,7 +75,7 @@ class DtsOutputStream(object):
 		self.write32(*map(lambda f: unpack("i", pack("f", f))[0], values))
 
 	def write_string(self, string):
-		self.write8(*string.encode("ascii"))
+		self.write8(*string.encode("cp1252"))
 		self.write8(0)
 
 	def write_vec3(self, v):
@@ -90,9 +95,18 @@ class DtsOutputStream(object):
 			int(quat.z * 32767.0),
 			int(quat.w * 32767.0))
 
+	def write_blend_quat(self, quat):
+		self.write16(
+			int(quat.x *  32767),
+			int(quat.y *  32767),
+			int(quat.z *  32767),
+			int(quat.w * -32767))
+
 class DtsInputStream(object):
 	def __init__(self, fd):
-		self.sequence = 0
+		self.sequence32 = c_int(0)
+		self.sequence16 = c_short(0)
+		self.sequence8  = c_byte(0)
 		self.dtsVersion, self.exporterVersion = unpack("hh", fd.read(4))
 		end8, end32, end16 = unpack("iii", fd.read(12))
 		num32 = end32
@@ -107,11 +121,13 @@ class DtsInputStream(object):
 
 	def guard(self, specific=None):
 		if specific != None:
-			assert specific == self.sequence
-		assert self.sequence == self.read32()
-		assert self.sequence == self.read16()
-		assert self.sequence == self.read8()
-		self.sequence = self.sequence + 1
+			assert c_int(specific).value == self.sequence32.value
+		assert self.sequence32.value == self.read32()
+		assert self.sequence16.value == self.read16()
+		assert self.sequence8.value == self.read8()
+		self.sequence32.value += 1
+		self.sequence16.value += 1
+		self.sequence8.value += 1
 
 	def read32(self):
 		if self.tell32 >= len(self.buffer32):
@@ -165,6 +181,13 @@ class DtsInputStream(object):
 			self.read16() / 32767.0,
 			self.read16() / 32767.0,
 			self.read16() / 32767.0)
+
+	def read_blend_quat(self):
+		x = self.read16() /  32767
+		y = self.read16() /  32767
+		z = self.read16() /  32767
+		w = self.read16() / -32767
+		return mathutils.Quaternion((w, x, y, z))
 
 class DtsShape(object):
 	def __init__(self):
@@ -393,7 +416,7 @@ class DtsShape(object):
 			else:
 				ws(fd, "b", len(mat.name))
 
-			fd.write(mat.name.encode("ascii"))
+			fd.write(mat.name.encode("cp1252"))
 		for mat in self.materials:
 			ws(fd, "i", mat.flags)
 		for mat in self.materials:
@@ -595,7 +618,7 @@ class DtsShape(object):
 			else:
 				length = unpack("B", fd.read(1))[0]
 
-			self.materials[i].name = fd.read(length).decode("ascii")
+			self.materials[i].name = fd.read(length).decode("cp1252")
 
 		for i in range(n_material):
 			self.materials[i].flags = unpack("I", fd.read(4))[0]

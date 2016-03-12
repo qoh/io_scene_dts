@@ -56,6 +56,12 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
             default=False,
             )
 
+    import_sequences = BoolProperty(
+            name="Import sequences",
+            description="Automatically add keyframes for embedded sequences",
+            default=True,
+            )
+
     debug_report = BoolProperty(
         name="Write debug report",
         description="Dump out all the information from the DTS to a file",

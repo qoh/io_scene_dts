@@ -177,6 +177,7 @@ def load(operator, context, filepath,
          node_mode="EMPTY",
          hide_default_player=False,
          skeleton_only=False,
+         import_sequences=True,
          debug_report=False):
     shape = DtsShape()
 
@@ -248,103 +249,104 @@ def load(operator, context, filepath,
         pass
 
     # Try animation?
-    globalToolIndex = 10
-    fps = context.scene.render.fps
+    if import_sequences:
+        globalToolIndex = 10
+        fps = context.scene.render.fps
 
-    sequences_text = []
+        sequences_text = []
 
-    for seq in shape.sequences:
-        name = shape.names[seq.nameIndex]
-        print("Importing sequence", name)
+        for seq in shape.sequences:
+            name = shape.names[seq.nameIndex]
+            print("Importing sequence", name)
 
-        flags = []
+            flags = []
 
-        if seq.flags & Sequence.Cyclic:
-            flags.append("cyclic")
+            if seq.flags & Sequence.Cyclic:
+                flags.append("cyclic")
 
-        if seq.flags & Sequence.Blend:
-            flags.append("blend {}".format(seq.priority))
+            if seq.flags & Sequence.Blend:
+                flags.append("blend {}".format(seq.priority))
 
-        if flags:
-            sequences_text.append(name + ": " + ", ".join(flags))
+            if flags:
+                sequences_text.append(name + ": " + ", ".join(flags))
 
-        nodesRotation = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.rotationMatters))))
-        nodesTranslation = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.translationMatters))))
-        nodesScale = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.scaleMatters))))
+            nodesRotation = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.rotationMatters))))
+            nodesTranslation = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.translationMatters))))
+            nodesScale = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.scaleMatters))))
 
-        step = 5
+            step = 5
 
-        for mattersIndex, node in enumerate(nodesTranslation):
-            ob = node_obs_val[node]
+            for mattersIndex, node in enumerate(nodesTranslation):
+                ob = node_obs_val[node]
 
-            for frameIndex in range(seq.numKeyframes):
-                old = ob.location
-                ob.location = shape.node_translations[seq.baseTranslation + mattersIndex * seq.numKeyframes + frameIndex]
-                ob.keyframe_insert("location", index=-1, frame=globalToolIndex + frameIndex * step)
-                ob.location = old
+                for frameIndex in range(seq.numKeyframes):
+                    old = ob.location
+                    ob.location = shape.node_translations[seq.baseTranslation + mattersIndex * seq.numKeyframes + frameIndex]
+                    ob.keyframe_insert("location", index=-1, frame=globalToolIndex + frameIndex * step)
+                    ob.location = old
 
-        for mattersIndex, node in enumerate(nodesRotation):
-            ob = node_obs_val[node]
+            for mattersIndex, node in enumerate(nodesRotation):
+                ob = node_obs_val[node]
 
-            for frameIndex in range(seq.numKeyframes):
-                old = ob.rotation_quaternion
-                ob.rotation_quaternion = shape.node_rotations[seq.baseRotation + mattersIndex * seq.numKeyframes + frameIndex].to_blender()
-                ob.keyframe_insert("rotation_quaternion", index=-1, frame=globalToolIndex + frameIndex * step)
-                ob.rotation_quaternion = old
+                for frameIndex in range(seq.numKeyframes):
+                    old = ob.rotation_quaternion
+                    ob.rotation_quaternion = shape.node_rotations[seq.baseRotation + mattersIndex * seq.numKeyframes + frameIndex].to_blender()
+                    ob.keyframe_insert("rotation_quaternion", index=-1, frame=globalToolIndex + frameIndex * step)
+                    ob.rotation_quaternion = old
 
-        for mattersIndex, node in enumerate(nodesScale):
-            ob = node_obs_val[node]
+            for mattersIndex, node in enumerate(nodesScale):
+                ob = node_obs_val[node]
 
-            for frameIndex in range(seq.numKeyframes):
-                old = ob.scale
-                index = seq.baseScale + mattersIndex * seq.numKeyframes + frameIndex
+                for frameIndex in range(seq.numKeyframes):
+                    old = ob.scale
+                    index = seq.baseScale + mattersIndex * seq.numKeyframes + frameIndex
 
-                if seq.UniformScale:
-                    s = shape.node_uniform_scales[index]
-                    ob.scale = s, s, s
-                elif seq.AlignedScale:
-                    ob.scale = shape.node_aligned_scales[index]
-                elif seq.ArbitraryScale:
-                    print("Warning: Arbitrary scale animation not implemented")
-                    break
-                else:
-                    print("Warning: Invalid scale flags found in sequence")
-                    break
+                    if seq.UniformScale:
+                        s = shape.node_uniform_scales[index]
+                        ob.scale = s, s, s
+                    elif seq.AlignedScale:
+                        ob.scale = shape.node_aligned_scales[index]
+                    elif seq.ArbitraryScale:
+                        print("Warning: Arbitrary scale animation not implemented")
+                        break
+                    else:
+                        print("Warning: Invalid scale flags found in sequence")
+                        break
 
-                ob.keyframe_insert("scale", index=-1, frame=globalToolIndex + frameIndex * step)
-                ob.scale = old
+                    ob.keyframe_insert("scale", index=-1, frame=globalToolIndex + frameIndex * step)
+                    ob.scale = old
 
-        context.scene.timeline_markers.new(name + ":start", globalToolIndex)
-        context.scene.timeline_markers.new(name + ":end", globalToolIndex + seq.numKeyframes * step)
-        globalToolIndex += seq.numKeyframes * step + 30
+            context.scene.timeline_markers.new(name + ":start", globalToolIndex)
+            context.scene.timeline_markers.new(name + ":end", globalToolIndex + seq.numKeyframes * step)
+            globalToolIndex += seq.numKeyframes * step + 30
 
-        # action = bpy.data.actions.new(name=shape.names[seq.nameIndex])
-        #
-        # for dim in range(3):
-        #     fcu = action.fcurves.new(data_path="location", index=dim)
-        #     fcu.keyframe_points.add(2)
-        #     fcu.keyframe_points[0].co = 10.0, 0.0
-        #     fcu.keyframe_points[1].co = 20.0, 1.0
-            # for frameIndex in range(seq.numKeyframes):
-            #     if seq.translationMatters[frameIndex]:
-            #         ind = len(fcu.keyframe_points)
-            #         fcu.keyframe_points.add(1)
-            #         fcu.keyframe_points[ind] = frameIndex, shape.node_translations[seq.baseTranslation + frameIndex][dim]
+            # action = bpy.data.actions.new(name=shape.names[seq.nameIndex])
+            #
+            # for dim in range(3):
+            #     fcu = action.fcurves.new(data_path="location", index=dim)
+            #     fcu.keyframe_points.add(2)
+            #     fcu.keyframe_points[0].co = 10.0, 0.0
+            #     fcu.keyframe_points[1].co = 20.0, 1.0
+                # for frameIndex in range(seq.numKeyframes):
+                #     if seq.translationMatters[frameIndex]:
+                #         ind = len(fcu.keyframe_points)
+                #         fcu.keyframe_points.add(1)
+                #         fcu.keyframe_points[ind] = frameIndex, shape.node_translations[seq.baseTranslation + frameIndex][dim]
 
-        # for dim in range(4):
-        #     fcu = action.fcurves.new(data_path="rotation_quaternion", index=dim)
-        #     for frameIndex in range(seq.numKeyframes):
-        #         if seq.rotationMatters[frameIndex]:
-        #             ind = len(fcu.keyframe_points)
-        #             fcu.keyframe_points.add(1)
-        #             fcu.keyframe_points[ind] = frameIndex, shape.node_rotations[seq.baseRotation + frameIndex][dim]
+            # for dim in range(4):
+            #     fcu = action.fcurves.new(data_path="rotation_quaternion", index=dim)
+            #     for frameIndex in range(seq.numKeyframes):
+            #         if seq.rotationMatters[frameIndex]:
+            #             ind = len(fcu.keyframe_points)
+            #             fcu.keyframe_points.add(1)
+            #             fcu.keyframe_points[ind] = frameIndex, shape.node_rotations[seq.baseRotation + frameIndex][dim]
 
-    if "Sequences" in bpy.data.texts:
-        sequences_buf = bpy.data.texts["Sequences"]
-    else:
-        sequences_buf = bpy.data.texts.new("Sequences")
+        if "Sequences" in bpy.data.texts:
+            sequences_buf = bpy.data.texts["Sequences"]
+        else:
+            sequences_buf = bpy.data.texts.new("Sequences")
 
-    sequences_buf.from_string("\n".join(sequences_text))
+        sequences_buf.from_string("\n".join(sequences_text))
 
     if not skeleton_only:
         # Then put objects in the armatures
