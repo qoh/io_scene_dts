@@ -83,7 +83,7 @@ def eksi_bone_zone(shape, bones, parent):
         node = Node(shape.name(bone.name), parent)
         node.bl_ob = bone
         node.translation = bone.head
-        node.rotation = Quaternion()
+        node.rotation = DsqQuat()
         shape.nodes.append(node)
 
 def export_bones(lookup, shape, bones, parent=-1):
@@ -91,7 +91,7 @@ def export_bones(lookup, shape, bones, parent=-1):
         node = Node(shape.name(bone.name), parent)
         node.bl_ob = bone
         r = (bone.matrix.to_4x4() * Matrix.Rotation(pi / -2, 4, "X")).to_quaternion()
-        node.rotation = Quaternion(r[1], r[2], r[3], -r[0])
+        node.rotation = DsqQuat(r[1], r[2], r[3], -r[0])
         if "zero_length" in bone:
             node.translation = Vector()
         else:
@@ -111,7 +111,7 @@ def export_all_nodes(lookup, shape, obs, parent=-1):
             node = Node(shape.name(ob.name), parent)
             node.bl_ob = ob
             node.translation = loc
-            node.rotation = Quaternion(rot[1], rot[2], rot[3], -rot[0])
+            node.rotation = DsqQuat(rot[1], rot[2], rot[3], -rot[0])
             shape.nodes.append(node)
             lookup[ob] = node
 
@@ -148,10 +148,10 @@ def fcurves_keyframe_in_range(curves, start, end):
     return False
 
 def transform_co(ob, co):
-    return ob.matrix_world * co
+    return ob.matrix_local * co
 
 def transform_normal(ob, normal):
-    return (ob.matrix_world.to_3x3() * normal).normalized()
+    return (ob.matrix_local.to_3x3() * normal).normalized()
 
 def save(operator, context, filepath,
          blank_material=True,
@@ -252,7 +252,7 @@ def save(operator, context, filepath,
 
                 auto_root_index = len(shape.nodes)
                 shape.nodes.append(Node(shape.name("__auto_root__")))
-                shape.default_rotations.append(Quaternion())
+                shape.default_rotations.append(DsqQuat())
                 shape.default_translations.append(Vector())
 
             attach_node = auto_root_index
@@ -332,6 +332,8 @@ def save(operator, context, filepath,
                 dmesh = Mesh(Mesh.StandardType)
                 shape.meshes.append(dmesh)
 
+                dmesh.b_matrix_world = bobj.matrix_world
+
                 for vertex in mesh.vertices:
                     if transform_mesh:
                         dmesh.verts.append(transform_co(bobj, vertex.co))
@@ -346,12 +348,13 @@ def save(operator, context, filepath,
 
                 got_tvert = set()
 
-                dmesh.bounds = dmesh.calculate_bounds(Vector(), Quaternion())
-                dmesh.center = Vector((
-                    (dmesh.bounds.min.x + dmesh.bounds.max.x) / 2,
-                    (dmesh.bounds.min.y + dmesh.bounds.max.y) / 2,
-                    (dmesh.bounds.min.z + dmesh.bounds.max.z) / 2))
-                dmesh.radius = dmesh.calculate_radius(Vector(), Quaternion(), dmesh.center)
+                dmesh.bounds = dmesh.calculate_bounds_mat(Matrix())
+                #dmesh.center = Vector((
+                #    (dmesh.bounds.min.x + dmesh.bounds.max.x) / 2,
+                #    (dmesh.bounds.min.y + dmesh.bounds.max.y) / 2,
+                #    (dmesh.bounds.min.z + dmesh.bounds.max.z) / 2))
+                dmesh.center = Vector()
+                dmesh.radius = dmesh.calculate_radius_mat(Matrix(), dmesh.center)
 
                 # Group all materials by their material_index
                 key = attrgetter("material_index")
@@ -465,11 +468,13 @@ def save(operator, context, filepath,
         Vector(( 10e30,  10e30,  10e30)),
         Vector((-10e30, -10e30, -10e30)))
 
+    shape.center = Vector()
+
     shape.radius = 0
     shape.radius_tube = 0
 
     for i, obj in enumerate(shape.objects):
-        trans, rot = shape.get_world(obj.node)
+        # trans, rot = shape.get_world(obj.node)
 
         for j in range(0, obj.numMeshes):
             mesh = shape.meshes[obj.firstMesh + j]
@@ -477,10 +482,14 @@ def save(operator, context, filepath,
             if mesh.type == Mesh.NullType:
                 continue
 
-            bounds = mesh.calculate_bounds(trans, rot)
+            # bounds = mesh.calculate_bounds(trans, rot)
+            b_mat = mesh.b_matrix_world
+            bounds = mesh.calculate_bounds_mat(b_mat)
 
-            shape.radius = max(shape.radius, mesh.calculate_radius(trans, rot, shape.center))
-            shape.radius_tube = max(shape.radius_tube, mesh.calculate_radius_tube(trans, rot, shape.center))
+            # shape.radius = max(shape.radius, mesh.calculate_radius(trans, rot, shape.center))
+            shape.radius = max(shape.radius, mesh.calculate_radius_mat(b_mat, shape.center))
+            # shape.radius_tube = max(shape.radius_tube, mesh.calculate_radius_tube(trans, rot, shape.center))
+            shape.radius_tube = max(shape.radius_tube, mesh.calculate_radius_tube_mat(b_mat, shape.center))
 
             shape.bounds.min.x = min(shape.bounds.min.x, bounds.min.x)
             shape.bounds.min.y = min(shape.bounds.min.y, bounds.min.y)
@@ -655,7 +664,7 @@ def save(operator, context, filepath,
                     r = Euler(evaluate_all(curves, frame), "XYZ").to_quaternion()
                 else:
                     assert false, "unknown rotation_mode after finding matters"
-                shape.node_rotations.append(Quaternion(r[1], r[2], r[3], -r[0]))
+                shape.node_rotations.append(DsqQuat(r[1], r[2], r[3], -r[0]))
 
         for curves in seq_curves_translation:
             for frame in frame_indices:

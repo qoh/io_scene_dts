@@ -4,18 +4,8 @@ from enum import Enum
 
 import math
 
-try:
-	import mathutils
-	from mathutils import Vector
-except ImportError:
-	class Vector:
-		def __init__(self, v=None):
-			if v == None:
-				self.x = 0
-				self.y = 0
-				self.z = 0
-			else:
-				self.x, self.y, self.z = v
+import mathutils
+from mathutils import Vector, Matrix
 
 def bit(n):
 	return 1 << n
@@ -28,7 +18,7 @@ class Box:
 	def __repr__(self):
 		return "({}, {})".format(self.min, self.max)
 
-class Quaternion:
+class DsqQuat:
 	def __init__(self, x=0, y=0, z=0, w=1):
 		self.x = x
 		self.y = y
@@ -36,7 +26,7 @@ class Quaternion:
 		self.w = w
 
 	def __mul__(self, other):
-		return Quaternion(
+		return DsqQuat(
 			+self.x*other.w +self.y*other.z -self.z*other.y +self.w*other.x,
 			-self.x*other.z +self.y*other.w +self.z*other.x +self.w*other.y,
 			+self.x*other.y -self.y*other.x +self.z*other.w +self.w*other.z,
@@ -303,6 +293,41 @@ class Mesh:
 		for vert in self.verts:
 			tv = rot.apply(vert) + trans
 			delta = tv - center
+			radius = max(radius, Vector((delta.x, delta.y)).length)
+
+		return radius
+
+	def transformed_verts(self, mat):
+		return map(lambda vert: mat * vert, self.verts)
+
+	def calculate_bounds_mat(self, mat):
+		box = Box(
+			Vector(( 10e30,  10e30,  10e30)),
+			Vector((-10e30, -10e30, -10e30)))
+
+		for vert in self.transformed_verts(mat):
+			box.min.x = min(box.min.x, vert.x)
+			box.min.y = min(box.min.y, vert.y)
+			box.min.z = min(box.min.z, vert.z)
+			box.max.x = max(box.max.x, vert.x)
+			box.max.y = max(box.max.y, vert.y)
+			box.max.z = max(box.max.z, vert.z)
+
+		return box
+
+	def calculate_radius_mat(self, mat, center):
+		radius = 0.0
+
+		for vert in self.transformed_verts(mat):
+			radius = max(radius, (vert - center).length)
+
+		return radius
+
+	def calculate_radius_tube_mat(self, mat, center):
+		radius = 0
+
+		for vert in self.transformed_verts(mat):
+			delta = vert - center
 			radius = max(radius, Vector((delta.x, delta.y)).length)
 
 		return radius

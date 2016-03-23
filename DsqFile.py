@@ -1,4 +1,4 @@
-from .DtsTypes import Sequence, Trigger, Quaternion, Vector
+from .DtsTypes import Sequence, Trigger, DsqQuat, Vector
 from struct import pack, unpack, calcsize
 
 def read(fd, fmt):
@@ -19,7 +19,7 @@ def write_vec(fd, v):
 
 def read_quat(fd):
     x, y, z, w = read(fd, "4h")
-    return Quaternion(
+    return DsqQuat(
         x / 32767.0,
         y / 32767.0,
         z / 32767.0,

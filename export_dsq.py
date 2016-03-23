@@ -20,7 +20,7 @@ def rotation_from_ob(ob):
         r = ob.rotation_quaternion # ob.rotation_axis_angle
     else:
         r = ob.rotation_euler.to_quaternion()
-    return Quaternion(r[1], r[2], r[3], -r[0])
+    return DtsQuat(r[1], r[2], r[3], -r[0])
 
 def export_all_nodes(node_ob, dsq, obs):
     for ob in obs:
@@ -266,7 +266,7 @@ def save(operator, context, filepath,
                     r = Euler(evaluate_all(curves, frame), "XYZ").to_quaternion()
                 else:
                     assert false, "unknown rotation_mode after finding matters"
-                dsq.rotations.append(Quaternion(r[1], r[2], r[3], -r[0]))
+                dsq.rotations.append(DsqQuat(r[1], r[2], r[3], -r[0]))
 
         for curves in seq_curves_translation:
             for frame in frame_indices:

@@ -176,7 +176,7 @@ class DtsInputStream(object):
 		return Box(self.read_vec3(), self.read_vec3())
 
 	def read_quat(self):
-		return Quaternion(
+		return DsqQuat(
 			self.read16() / 32767.0,
 			self.read16() / 32767.0,
 			self.read16() / 32767.0,
@@ -241,13 +241,23 @@ class DtsShape(object):
 			chain.append(nodeid)
 
 		trans = Vector()
-		rot = Quaternion(0, 0, 0, 1)
+		rot = DsqQuat(0, 0, 0, 1)
 
 		for i in reversed(chain):
 			trans += rot.apply(self.default_rotations[i])
 			rot = self.default_rotations[i] * rot
 
 		return trans, rot
+
+	def get_world_mat(self, nodeid):
+		matrix = Matrix()
+
+		while nodeid != -1:
+			cur = Matrix.Translation(self.default_translations[nodeid]) * self.default_rotations[nodeid].to_matrix()
+			matrix = cur * matrix
+			nodeid = self.nodes[nodeid].parent
+
+		return mat
 
 	def verify(self):
 		assert self.detail_levels
