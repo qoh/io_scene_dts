@@ -172,6 +172,55 @@ def create_bmesh(dmesh, materials, shape):
 
     return me
 
+def action_get_or_new(ob):
+  if not ob.animation_data:
+    ob.animation_data_create()
+
+  if ob.animation_data.action:
+    return ob.animation_data.action
+
+  action = bpy.data.actions.new(ob.name + "Action")
+  ob.animation_data.action = action
+
+  return action
+
+def ob_curves_array(ob, data_path, array_count):
+  action = action_get_or_new(ob)
+  curves = [None] * array_count
+
+  for curve in action.fcurves:
+    if curve.data_path != data_path or curve.array_index < 0 or curve.array_index >= array_count:
+      continue
+
+    if curves[curve.array_index]:
+      pass # TODO: warn if more than one curve for an array slot
+
+    curves[curve.array_index] = curve
+
+  for index, curve in enumerate(curves):
+    if curve is None:
+      curves[index] = action.fcurves.new(data_path, index)
+
+  return curves
+
+def ob_location_curves(ob):
+  return ob_curves_array(ob, "location", 3)
+
+def ob_scale_curves(ob):
+  return ob_curves_array(ob, "scale", 3)
+
+def ob_rotation_curves(ob):
+  if ob.rotation_mode == "QUATERNION":
+    data_path = "rotation_quaternion"
+    array_count = 4
+  elif ob.rotation_mode == "XYZ":
+    data_path = "rotation_euler"
+    array_count = 3
+  else:
+    assert false, "unhandled rotation mode '{}' on '{}'".format(ob.rotation_mode, ob.name)
+
+  return ob.rotation_mode, ob_curves_array(ob, data_path, array_count)
+
 def load(operator, context, filepath,
          node_mode="EMPTY",
          hide_default_player=False,
@@ -273,34 +322,49 @@ def load(operator, context, filepath,
 
             for mattersIndex, node in enumerate(nodesTranslation):
                 ob = node_obs_val[node]
+                curves = ob_location_curves(ob)
 
                 for frameIndex in range(seq.numKeyframes):
-                    old = ob.location
-                    ob.location = shape.node_translations[seq.baseTranslation + mattersIndex * seq.numKeyframes + frameIndex]
-                    ob.keyframe_insert("location", index=-1, frame=globalToolIndex + frameIndex * step)
-                    ob.location = old
+                    vec = shape.node_translations[seq.baseTranslation + mattersIndex * seq.numKeyframes + frameIndex]
+
+                    for curve in curves:
+                        curve.keyframe_points.add(1)
+                        key = curve.keyframe_points[-1]
+                        key.interpolation = "LINEAR"
+                        key.co = (
+                            globalToolIndex + frameIndex * step,
+                            vec[curve.array_index])
 
             for mattersIndex, node in enumerate(nodesRotation):
                 ob = node_obs_val[node]
+                mode, curves = ob_rotation_curves(ob)
 
                 for frameIndex in range(seq.numKeyframes):
-                    old = ob.rotation_quaternion
-                    ob.rotation_quaternion = shape.node_rotations[seq.baseRotation + mattersIndex * seq.numKeyframes + frameIndex]
-                    ob.keyframe_insert("rotation_quaternion", index=-1, frame=globalToolIndex + frameIndex * step)
-                    ob.rotation_quaternion = old
+                    rot = shape.node_rotations[seq.baseRotation + mattersIndex * seq.numKeyframes + frameIndex]
+                    if mode != "QUATERNION":
+                        rot = rot.to_euler(mode)
+
+                    for curve in curves:
+                        curve.keyframe_points.add(1)
+                        key = curve.keyframe_points[-1]
+                        key.interpolation = "LINEAR"
+                        key.co = (
+                            globalToolIndex + frameIndex * step,
+                            rot[curve.array_index])
 
             for mattersIndex, node in enumerate(nodesScale):
                 ob = node_obs_val[node]
+                curves = ob_scale_curves(ob)
 
                 for frameIndex in range(seq.numKeyframes):
-                    old = ob.scale
                     index = seq.baseScale + mattersIndex * seq.numKeyframes + frameIndex
+                    vec = shape.node_translations[seq.baseTranslation + mattersIndex * seq.numKeyframes + frameIndex]
 
                     if seq.UniformScale:
                         s = shape.node_uniform_scales[index]
-                        ob.scale = s, s, s
+                        vec = (s, s, s)
                     elif seq.AlignedScale:
-                        ob.scale = shape.node_aligned_scales[index]
+                        vec = shape.node_aligned_scales[index]
                     elif seq.ArbitraryScale:
                         print("Warning: Arbitrary scale animation not implemented")
                         break
@@ -308,33 +372,17 @@ def load(operator, context, filepath,
                         print("Warning: Invalid scale flags found in sequence")
                         break
 
-                    ob.keyframe_insert("scale", index=-1, frame=globalToolIndex + frameIndex * step)
-                    ob.scale = old
+                    for curve in curves:
+                        curve.keyframe_points.add(1)
+                        key = curve.keyframe_points[-1]
+                        key.interpolation = "LINEAR"
+                        key.co = (
+                            globalToolIndex + frameIndex * step,
+                            vec[curve.array_index])
 
             context.scene.timeline_markers.new(name + ":start", globalToolIndex)
             context.scene.timeline_markers.new(name + ":end", globalToolIndex + seq.numKeyframes * step)
             globalToolIndex += seq.numKeyframes * step + 30
-
-            # action = bpy.data.actions.new(name=shape.names[seq.nameIndex])
-            #
-            # for dim in range(3):
-            #     fcu = action.fcurves.new(data_path="location", index=dim)
-            #     fcu.keyframe_points.add(2)
-            #     fcu.keyframe_points[0].co = 10.0, 0.0
-            #     fcu.keyframe_points[1].co = 20.0, 1.0
-                # for frameIndex in range(seq.numKeyframes):
-                #     if seq.translationMatters[frameIndex]:
-                #         ind = len(fcu.keyframe_points)
-                #         fcu.keyframe_points.add(1)
-                #         fcu.keyframe_points[ind] = frameIndex, shape.node_translations[seq.baseTranslation + frameIndex][dim]
-
-            # for dim in range(4):
-            #     fcu = action.fcurves.new(data_path="rotation_quaternion", index=dim)
-            #     for frameIndex in range(seq.numKeyframes):
-            #         if seq.rotationMatters[frameIndex]:
-            #             ind = len(fcu.keyframe_points)
-            #             fcu.keyframe_points.add(1)
-            #             fcu.keyframe_points[ind] = frameIndex, shape.node_rotations[seq.baseRotation + frameIndex][dim]
 
         if "Sequences" in bpy.data.texts:
             sequences_buf = bpy.data.texts["Sequences"]
