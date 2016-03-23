@@ -42,7 +42,7 @@ def ob_curves_array(ob, data_path, array_count):
   for curve in action.fcurves:
     if curve.data_path != data_path or curve.array_index < 0 or curve.array_index >= array_count:
       continue
-    
+
     if curves[curve.array_index]:
       pass # TODO: warn if more than one curve for an array slot
 
@@ -88,7 +88,7 @@ def load(operator, context, filepath):
   found_obs = {}
 
   # Find all our candidate nodes
-  # DSQ is case-sensitive, that's why we can't just [] lookup
+  # DSQ is case-insensitive, that's why we can't just [] lookup
   for ob in context.scene.objects:
     if ob.type in ("EMPTY", "ARMATURE"):
       name = ob.name.lower()
@@ -110,7 +110,7 @@ def load(operator, context, filepath):
       nodes[index] = found_obs[lower]
     else:
       node_missing.append(name)
-  
+
   if node_missing:
     return fail(operator, "The following nodes from the DSQ file could not be found in your scene:\n" + ", ".join(node_missing))
 
@@ -168,12 +168,6 @@ def load(operator, context, filepath):
     for mattersIndex, ob in enumerate(nodesTranslation):
       curves = ob_location_curves(ob)
 
-      #for frameIndex in range(seq.numKeyframes):
-      #  old = ob.location
-      #  ob.location = dsq.translations[seq.baseTranslation + mattersIndex * seq.numKeyframes + frameIndex]
-      #  ob.keyframe_insert("location", index=-1, frame=last_frame + frameIndex * step)
-      #  ob.location = old
-
       for frameIndex in range(seq.numKeyframes):
         vec = dsq.translations[seq.baseTranslation + mattersIndex * seq.numKeyframes + frameIndex]
 
@@ -186,14 +180,8 @@ def load(operator, context, filepath):
     for mattersIndex, ob in enumerate(nodesRotation):
       mode, curves = ob_rotation_curves(ob)
 
-      #for frameIndex in range(seq.numKeyframes):
-      #  old = ob.rotation_quaternion
-      #  ob.rotation_quaternion = dsq.rotations[seq.baseRotation + mattersIndex * seq.numKeyframes + frameIndex].to_blender()
-      #  ob.keyframe_insert("rotation_quaternion", index=-1, frame=last_frame + frameIndex * step)
-      #  ob.rotation_quaternion = old
-
       for frameIndex in range(seq.numKeyframes):
-        rot = dsq.rotations[seq.baseRotation + mattersIndex * seq.numKeyframes + frameIndex].to_blender()
+        rot = dsq.rotations[seq.baseRotation + mattersIndex * seq.numKeyframes + frameIndex]
         if mode != "QUATERNION":
           rot = rot.to_euler(mode)
 

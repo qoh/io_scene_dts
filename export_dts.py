@@ -1,6 +1,4 @@
 import bpy, bmesh
-import mathutils
-from mathutils import Matrix, Euler
 from math import sqrt, pi
 from operator import attrgetter
 from itertools import groupby
@@ -78,48 +76,20 @@ def export_material(mat, shape):
 
     return material_index
 
-def eksi_bone_zone(shape, bones, parent):
-    for bone in bones:
-        node = Node(shape.name(bone.name), parent)
-        node.bl_ob = bone
-        node.translation = bone.head
-        node.rotation = DtsQuat()
-        shape.nodes.append(node)
-
-def export_bones(lookup, shape, bones, parent=-1):
-    for bone in bones:
-        node = Node(shape.name(bone.name), parent)
-        node.bl_ob = bone
-        r = (bone.matrix.to_4x4() * Matrix.Rotation(pi / -2, 4, "X")).to_quaternion()
-        node.rotation = DtsQuat(r[1], r[2], r[3], -r[0])
-        if "zero_length" in bone:
-            node.translation = Vector()
-        else:
-            node.translation = bone.tail - bone.head
-        shape.nodes.append(node)
-        lookup[bone.name] = node
-        export_bones(lookup, shape, bone.children, node)
-
 def export_all_nodes(lookup, shape, obs, parent=-1):
     for ob in obs:
         if ob.type == "ARMATURE" or ob.type == "EMPTY":
             loc, rot, scale = ob.matrix_local.decompose()
 
             if scale != Vector((1, 1, 1)):
-                print("Warning: '{}' uses scale, which cannot be export to DTS nodes".format(ob.name))
+                print("Warning: '{}' uses scale, which cannot be exported to DTS nodes".format(ob.name))
 
             node = Node(shape.name(ob.name), parent)
             node.bl_ob = ob
             node.translation = loc
-            node.rotation = DtsQuat(rot[1], rot[2], rot[3], -rot[0])
+            node.rotation = rot
             shape.nodes.append(node)
             lookup[ob] = node
-
-            if ob.type == "ARMATURE":
-                bones = ob.data.bones
-                if len(bones) >= 2:
-                    print("Warning: Exporting bones in armature '{}' as nodes. Use child armatures instead.".format(ob.name))
-                    eksi_bone_zone(shape, bones, node)
 
             export_all_nodes(lookup, shape, ob.children, node)
 
@@ -252,7 +222,7 @@ def save(operator, context, filepath,
 
                 auto_root_index = len(shape.nodes)
                 shape.nodes.append(Node(shape.name("__auto_root__")))
-                shape.default_rotations.append(DtsQuat())
+                shape.default_rotations.append(Quaternion())
                 shape.default_translations.append(Vector())
 
             attach_node = auto_root_index
@@ -474,21 +444,16 @@ def save(operator, context, filepath,
     shape.radius_tube = 0
 
     for i, obj in enumerate(shape.objects):
-        # trans, rot = shape.get_world(obj.node)
-
         for j in range(0, obj.numMeshes):
             mesh = shape.meshes[obj.firstMesh + j]
 
             if mesh.type == Mesh.NullType:
                 continue
 
-            # bounds = mesh.calculate_bounds(trans, rot)
             b_mat = mesh.b_matrix_world
             bounds = mesh.calculate_bounds_mat(b_mat)
 
-            # shape.radius = max(shape.radius, mesh.calculate_radius(trans, rot, shape.center))
             shape.radius = max(shape.radius, mesh.calculate_radius_mat(b_mat, shape.center))
-            # shape.radius_tube = max(shape.radius_tube, mesh.calculate_radius_tube(trans, rot, shape.center))
             shape.radius_tube = max(shape.radius_tube, mesh.calculate_radius_tube_mat(b_mat, shape.center))
 
             shape.bounds.min.x = min(shape.bounds.min.x, bounds.min.x)
@@ -664,7 +629,7 @@ def save(operator, context, filepath,
                     r = Euler(evaluate_all(curves, frame), "XYZ").to_quaternion()
                 else:
                     assert false, "unknown rotation_mode after finding matters"
-                shape.node_rotations.append(DtsQuat(r[1], r[2], r[3], -r[0]))
+                shape.node_rotations.append(r)
 
         for curves in seq_curves_translation:
             for frame in frame_indices:

@@ -90,17 +90,10 @@ class DtsOutputStream(object):
 
 	def write_quat(self, quat):
 		self.write16(
-			c_short(int(quat.x * 32767.0)).value,
-			c_short(int(quat.y * 32767.0)).value,
-			c_short(int(quat.z * 32767.0)).value,
-			c_short(int(quat.w * 32767.0)).value)
-
-	def write_blend_quat(self, quat):
-		self.write16(
-			int(quat.x *  32767),
-			int(quat.y *  32767),
-			int(quat.z *  32767),
-			int(quat.w * -32767))
+			c_short(int(quat.x *  32767)).value,
+			c_short(int(quat.y *  32767)).value,
+			c_short(int(quat.z *  32767)).value,
+			c_short(int(quat.w * -32767)).value)
 
 class DtsInputStream(object):
 	def __init__(self, fd):
@@ -176,18 +169,11 @@ class DtsInputStream(object):
 		return Box(self.read_vec3(), self.read_vec3())
 
 	def read_quat(self):
-		return DtsQuat(
-			self.read16() / 32767.0,
-			self.read16() / 32767.0,
-			self.read16() / 32767.0,
-			self.read16() / 32767.0)
-
-	def read_blend_quat(self):
 		x = self.read16() /  32767
 		y = self.read16() /  32767
 		z = self.read16() /  32767
 		w = self.read16() / -32767
-		return mathutils.Quaternion((w, x, y, z))
+		return Quaternion((w, x, y, z))
 
 class DtsShape(object):
 	def __init__(self):
@@ -232,22 +218,6 @@ class DtsShape(object):
 			self._names_lookup[string.lower()] = index
 
 		return index
-
-	def get_world(self, nodeid):
-		chain = [nodeid]
-
-		while self.nodes[nodeid].parent != -1:
-			nodeid = self.nodes[nodeid].parent
-			chain.append(nodeid)
-
-		trans = Vector()
-		rot = DtsQuat(0, 0, 0, 1)
-
-		for i in reversed(chain):
-			trans += rot.apply(self.default_rotations[i])
-			rot = self.default_rotations[i] * rot
-
-		return trans, rot
 
 	def get_world_mat(self, nodeid):
 		matrix = Matrix()

@@ -1,5 +1,6 @@
-from .DtsTypes import Sequence, Trigger, DtsQuat, Vector
+from .DtsTypes import Sequence, Trigger, Vector, Quaternion
 from struct import pack, unpack, calcsize
+from ctypes import c_byte, c_short, c_int
 
 def read(fd, fmt):
     return unpack(fmt, fd.read(calcsize(fmt)))
@@ -9,21 +10,21 @@ def write(fd, fmt, *values):
 
 def write_quat(fd, q):
     write(fd, "4h",
-        int(q.x * 32767),
-        int(q.y * 32767),
-        int(q.z * 32767),
-        int(q.w * 32767))
+        c_short(int(q.x *  32767)).value,
+        c_short(int(q.y *  32767)).value,
+        c_short(int(q.z *  32767)).value,
+        c_short(int(q.w * -32767)).value)
 
 def write_vec(fd, v):
     write(fd, "3f", v.x, v.y, v.z)
 
 def read_quat(fd):
     x, y, z, w = read(fd, "4h")
-    return DtsQuat(
-        x / 32767.0,
-        y / 32767.0,
-        z / 32767.0,
-        w / 32767.0)
+    return Quaternion((
+        w / -32767,
+        x /  32767,
+        y /  32767,
+        z /  32767))
 
 def read_vec(fd):
     return Vector(read(fd, "3f"))
@@ -146,7 +147,7 @@ class DsqFile:
         old_shape_num_objects = read(fd, "<i")
 
         if version < 17:
-            assert false, "TODO: read keyframes"
+            assert false, "TODO: read keyframes from version < 17"
 
         if version > 21:
             self.rotations = [read_quat(fd) for i in range(read(fd, "<i")[0])]

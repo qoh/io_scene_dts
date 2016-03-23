@@ -1,5 +1,4 @@
 import bpy
-import mathutils
 import os
 from bpy_extras.io_utils import unpack_list
 
@@ -234,13 +233,7 @@ def load(operator, context, filepath,
 
             ob.location = shape.default_translations[i]
             ob.rotation_mode = "QUATERNION"
-            # weird representation difference -wxyz vs xyzw
-            ob.rotation_quaternion = mathutils.Quaternion((
-                -shape.default_rotations[i].w,
-                shape.default_rotations[i].x,
-                shape.default_rotations[i].y,
-                shape.default_rotations[i].z
-            ))
+            ob.rotation_quaternion = shape.default_rotations[i]
 
             context.scene.objects.link(ob)
             node_obs.append(ob)
@@ -276,7 +269,7 @@ def load(operator, context, filepath,
             nodesTranslation = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.translationMatters))))
             nodesScale = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.scaleMatters))))
 
-            step = 5
+            step = 1
 
             for mattersIndex, node in enumerate(nodesTranslation):
                 ob = node_obs_val[node]
@@ -292,7 +285,7 @@ def load(operator, context, filepath,
 
                 for frameIndex in range(seq.numKeyframes):
                     old = ob.rotation_quaternion
-                    ob.rotation_quaternion = shape.node_rotations[seq.baseRotation + mattersIndex * seq.numKeyframes + frameIndex].to_blender()
+                    ob.rotation_quaternion = shape.node_rotations[seq.baseRotation + mattersIndex * seq.numKeyframes + frameIndex]
                     ob.keyframe_insert("rotation_quaternion", index=-1, frame=globalToolIndex + frameIndex * step)
                     ob.rotation_quaternion = old
 
