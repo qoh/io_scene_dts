@@ -83,7 +83,7 @@ def eksi_bone_zone(shape, bones, parent):
         node = Node(shape.name(bone.name), parent)
         node.bl_ob = bone
         node.translation = bone.head
-        node.rotation = DsqQuat()
+        node.rotation = DtsQuat()
         shape.nodes.append(node)
 
 def export_bones(lookup, shape, bones, parent=-1):
@@ -91,7 +91,7 @@ def export_bones(lookup, shape, bones, parent=-1):
         node = Node(shape.name(bone.name), parent)
         node.bl_ob = bone
         r = (bone.matrix.to_4x4() * Matrix.Rotation(pi / -2, 4, "X")).to_quaternion()
-        node.rotation = DsqQuat(r[1], r[2], r[3], -r[0])
+        node.rotation = DtsQuat(r[1], r[2], r[3], -r[0])
         if "zero_length" in bone:
             node.translation = Vector()
         else:
@@ -111,7 +111,7 @@ def export_all_nodes(lookup, shape, obs, parent=-1):
             node = Node(shape.name(ob.name), parent)
             node.bl_ob = ob
             node.translation = loc
-            node.rotation = DsqQuat(rot[1], rot[2], rot[3], -rot[0])
+            node.rotation = DtsQuat(rot[1], rot[2], rot[3], -rot[0])
             shape.nodes.append(node)
             lookup[ob] = node
 
@@ -252,7 +252,7 @@ def save(operator, context, filepath,
 
                 auto_root_index = len(shape.nodes)
                 shape.nodes.append(Node(shape.name("__auto_root__")))
-                shape.default_rotations.append(DsqQuat())
+                shape.default_rotations.append(DtsQuat())
                 shape.default_translations.append(Vector())
 
             attach_node = auto_root_index
@@ -664,7 +664,7 @@ def save(operator, context, filepath,
                     r = Euler(evaluate_all(curves, frame), "XYZ").to_quaternion()
                 else:
                     assert false, "unknown rotation_mode after finding matters"
-                shape.node_rotations.append(DsqQuat(r[1], r[2], r[3], -r[0]))
+                shape.node_rotations.append(DtsQuat(r[1], r[2], r[3], -r[0]))
 
         for curves in seq_curves_translation:
             for frame in frame_indices:

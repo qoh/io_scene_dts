@@ -18,7 +18,7 @@ class Box:
 	def __repr__(self):
 		return "({}, {})".format(self.min, self.max)
 
-class DsqQuat:
+class DtsQuat:
 	def __init__(self, x=0, y=0, z=0, w=1):
 		self.x = x
 		self.y = y
@@ -26,7 +26,7 @@ class DsqQuat:
 		self.w = w
 
 	def __mul__(self, other):
-		return DsqQuat(
+		return DtsQuat(
 			+self.x*other.w +self.y*other.z -self.z*other.y +self.w*other.x,
 			-self.x*other.z +self.y*other.w +self.z*other.x +self.w*other.y,
 			+self.x*other.y -self.y*other.x +self.z*other.w +self.w*other.z,

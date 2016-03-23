@@ -176,7 +176,7 @@ class DtsInputStream(object):
 		return Box(self.read_vec3(), self.read_vec3())
 
 	def read_quat(self):
-		return DsqQuat(
+		return DtsQuat(
 			self.read16() / 32767.0,
 			self.read16() / 32767.0,
 			self.read16() / 32767.0,
@@ -241,7 +241,7 @@ class DtsShape(object):
 			chain.append(nodeid)
 
 		trans = Vector()
-		rot = DsqQuat(0, 0, 0, 1)
+		rot = DtsQuat(0, 0, 0, 1)
 
 		for i in reversed(chain):
 			trans += rot.apply(self.default_rotations[i])

@@ -266,7 +266,7 @@ def save(operator, context, filepath,
                     r = Euler(evaluate_all(curves, frame), "XYZ").to_quaternion()
                 else:
                     assert false, "unknown rotation_mode after finding matters"
-                dsq.rotations.append(DsqQuat(r[1], r[2], r[3], -r[0]))
+                dsq.rotations.append(DtsQuat(r[1], r[2], r[3], -r[0]))
 
         for curves in seq_curves_translation:
             for frame in frame_indices:
