@@ -175,6 +175,8 @@ class Mesh:
 	NullType = 4
 	TypeMask = 7
 
+	TypeName = ["Standard", "Skin", "Decal", "Sorted", "Null"]
+
 	Billboard = bit(31)
 	HasDetailTexture = bit(30)
 	BillboardZAxis = bit(29)

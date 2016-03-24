@@ -107,15 +107,19 @@ def write_debug_report(filepath, shape):
 
         p("Meshes (" + str(len(shape.meshes)) + "):")
         for i, mesh in enumerate(shape.meshes):
-            p("  Mesh " + str(i))
-            p("    type = " + str(mesh.get_type()))
+            mtype = mesh.get_type()
+            p("  Mesh " + str(i) + " - " + Mesh.TypeName[mtype])
+
+            if mtype == Mesh.NullType:
+                continue
+
             p("    flags = " + str(mesh.get_flags()))
             p("    bounds = " + str(mesh.bounds))
             p("    center = " + str(mesh.center))
             p("    radius = " + str(mesh.radius))
-            p("    numFrames = " + str(mesh.numFrames))
-            p("    numMatFrames = " + str(mesh.numMatFrames))
-            p("    vertsPerFrame = " + str(mesh.vertsPerFrame))
+            # p("    numFrames = " + str(mesh.numFrames))
+            # p("    numMatFrames = " + str(mesh.numMatFrames))
+            # p("    vertsPerFrame = " + str(mesh.vertsPerFrame))
             # p("    parent (unused?) = " + str(mesh.parent))
             # p("    indices = " + ",".join(map(str, mesh.indices)))
             # p("    mindices = " + ",".join(map(str, mesh.mindices)))
