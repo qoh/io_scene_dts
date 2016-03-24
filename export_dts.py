@@ -216,7 +216,7 @@ def save(operator, context, filepath,
         else:
             print("Warning: Mesh '{}' has no parent".format(bobj.name))
 
-            if not auto_root_index:
+            if auto_root_index is None:
                 if "NodeOrder" in bpy.data.texts and "__auto_root__" not in order_key:
                     return fail(operator, "The mesh '{}' does not have a parent. Normally, the exporter would create a temporary parent for you to fix this, but you have a specified NodeOrder (may be created by previously importing a DTS file and not pressing Ctrl+N after you're done with it), which does not have the '__auto_root__' entry (name used for the automatic parent).".format(bobj.name))
 
