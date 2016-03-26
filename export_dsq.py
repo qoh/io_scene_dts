@@ -263,7 +263,7 @@ def save(operator, context, filepath,
         for (curves, mode) in seq_curves_rotation:
             for frame in frame_indices:
                 if mode == "QUATERNION":
-                    r = evaluate_all(curves, frame)
+                    r = Quaternion(evaluate_all(curves, frame))
                 elif mode == "XYZ":
                     r = Euler(evaluate_all(curves, frame), "XYZ").to_quaternion()
                 else:
