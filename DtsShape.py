@@ -219,6 +219,10 @@ class DtsShape(object):
 
 		return index
 
+	def name_resolve(self, string):
+		index = self.name(string)
+		return (index, self.names[index])
+
 	def get_world_mat(self, nodeid):
 		matrix = Matrix()
 

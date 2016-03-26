@@ -227,6 +227,8 @@ def save(operator, context, filepath,
 
             attach_node = auto_root_index
 
+        lod_name_index, lod_name = shape.name_resolve(lod_name)
+
         if lod_name not in scene_lods:
             match = re_lod_size.search(lod_name)
 
@@ -237,7 +239,7 @@ def save(operator, context, filepath,
                 lod_size = 32 # setting?
 
             print("Creating LOD '{}' (size {})".format(lod_name, lod_size))
-            scene_lods[lod_name] = DetailLevel(name=shape.name(lod_name), subshape=0, objectDetail=-1, size=lod_size)
+            scene_lods[lod_name] = DetailLevel(name=lod_name_index, subshape=0, objectDetail=-1, size=lod_size)
             shape.detail_levels.append(scene_lods[lod_name])
 
         name = bobj.name
