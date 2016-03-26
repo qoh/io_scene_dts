@@ -118,9 +118,21 @@ class ExportDTS(bpy.types.Operator, ExportHelper):
     #         )
 
     blank_material = BoolProperty(
-            name="Blank Material",
+            name="Blank material",
             description="Add a blank material to meshes with none assigned",
             default=True,
+            )
+
+    generate_texture = EnumProperty(
+            name="Generate textures",
+            description="Automatically generate solid color textures for materials",
+            default="custom-missing",
+            items=(
+                ("disabled", "Disabled", "Do not generate any textures"),
+                ("custom-missing", "Custom (if missing)", "Generate textures for non-default material names if not already present"),
+                ("custom-always", "Custom (always)", "Generate textures for non-default material names"),
+                ("all-missing", "All (if missing)", "Generate textures for all materials if not already present"),
+                ("all-always", "All (always)", "Generate textures for all materials"))
             )
 
     never_split = BoolProperty(

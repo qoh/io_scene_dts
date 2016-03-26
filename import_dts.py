@@ -5,33 +5,13 @@ from bpy_extras.io_utils import unpack_list
 from .DtsShape import DtsShape
 from .DtsTypes import *
 from .write_report import write_debug_report
+from .util import default_materials, resolve_texture
 
 import operator
 from functools import reduce
 from random import random
 
 blockhead_nodes = ("HeadSkin", "chest", "Larm", "Lhand", "Rarm", "Rhand", "pants", "LShoe", "RShoe")
-texture_extensions = ("png", "jpg")
-
-default_materials = {
-    "black": (0, 0, 0),
-    "black25": (191, 191, 191),
-    "black50": (128, 128, 128),
-    "black75": (64, 64, 64),
-    "blank": (255, 255, 255),
-    "blue": (0, 0, 255),
-    "darkRed": (128, 0, 0),
-    "gray25": (64, 64, 64),
-    "gray50": (128, 128, 128),
-    "gray75": (191, 191, 191),
-    "green": (26, 128, 64),
-    "lightBlue": (10, 186, 245),
-    "lightYellow": (249, 249, 99),
-    "palegreen": (125, 136, 104),
-    "red": (213, 0, 0),
-    "white": (255, 255, 255),
-    "yellow": (255, 255, 0)
-}
 
 for name, color in default_materials.items():
     default_materials[name] = (color[0] / 255, color[1] / 255, color[2] / 255)
@@ -39,29 +19,9 @@ for name, color in default_materials.items():
 def import_material(dmat, filepath):
     bmat = bpy.data.materials.new(dmat.name)
 
-    # Search through directories to find the material texture
-    dirname = os.path.dirname(filepath)
-    found_tex = False
+    texname = resolve_texture(filepath, dmat.name)
 
-    while True:
-        texbase = os.path.join(dirname, dmat.name)
-
-        for extension in texture_extensions:
-            texname = texbase + "." + extension
-
-            if os.path.isfile(texname):
-                found_tex = True
-                break
-
-        if found_tex or os.path.ismount(dirname):
-            break
-
-        prevdir, dirname = dirname, os.path.dirname(dirname)
-
-        if prevdir == dirname:
-            break
-
-    if found_tex:
+    if texname is not None:
         try:
             teximg = bpy.data.images.load(texname)
         except:
@@ -70,8 +30,8 @@ def import_material(dmat, filepath):
         texslot = bmat.texture_slots.add()
         tex = texslot.texture = bpy.data.textures.new(dmat.name, "IMAGE")
         tex.image = teximg
-    elif dmat.name in default_materials:
-        bmat.diffuse_color = default_materials[dmat.name]
+    elif dmat.name.lower() in default_materials:
+        bmat.diffuse_color = default_materials[dmat.name.lower()]
     else: # give it a random color
         bmat.diffuse_color = (random(), random(), random())
 
@@ -221,6 +181,89 @@ def ob_rotation_curves(ob):
 
   return ob.rotation_mode, ob_curves_array(ob, data_path, array_count)
 
+def load_new(operator, context, filepath):
+    shape = DtsShape()
+
+    with open(filepath, "rb") as fd:
+        shape.load(fd)
+
+    root_arm = bpy.data.armatures.new("scene")
+    root_ob = bpy.data.objects.new(root_arm.name, root_arm)
+
+    context.scene.objects.link(root_ob)
+    context.scene.objects.active = root_ob
+
+    bpy.ops.object.mode_set(mode="EDIT")
+
+    bones_indexed = []
+
+    for i, node in enumerate(shape.nodes):
+        bone = root_arm.edit_bones.new(shape.names[node.name])
+
+        bone.head = (0, 0, 0)
+        bone.tail = (0, 0, 1)
+        bone.roll = 0
+
+        if node.parent != -1:
+            bone.parent = bones_indexed[node.parent]
+
+        bones_indexed.append(bone)
+
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+    materials = {}
+
+    for dmat in shape.materials:
+        materials[dmat] = import_material(dmat, filepath)
+
+    # Now assign IFL material properties where needed
+    for ifl in shape.iflmaterials:
+        mat = materials[shape.materials[ifl.slot]]
+        assert mat["ifl"] == True
+        mat["iflName"] = shape.names[ifl.name]
+        mat["iflFirstFrame"] = ifl.firstFrame
+        mat["iflNumFrames"] = ifl.numFrames
+        mat["iflTime"] = ifl.time
+
+    detail_by_index = {}
+
+    for lod in shape.detail_levels:
+        detail_by_index[lod.objectDetail] = lod
+
+    for obj in shape.objects:
+        for index in range(obj.numMeshes):
+            mesh = shape.meshes[obj.firstMesh + index]
+
+            if mesh.type == Mesh.NullType:
+                continue
+
+            if mesh.type != Mesh.StandardType:
+                print("{} is a {} mesh, unsupported, but trying".format(
+                    shape.names[obj.name], mesh.type))
+                # continue
+
+            bmesh = create_bmesh(mesh, materials, shape)
+            bobj = bpy.data.objects.new(shape.names[obj.name], bmesh)
+            context.scene.objects.link(bobj)
+
+            if obj.node != -1:
+                # bobj.location = bones_indexed[obj.node].head
+                bobj.parent = root_ob
+                bobj.parent_bone = bones_indexed[obj.node].name
+                bobj.parent_type = "BONE"
+
+            if shape.names[obj.name] not in blockhead_nodes:
+                bobj.hide = True
+
+            lod_name = shape.names[detail_by_index[index].name]
+
+            if lod_name not in bpy.data.groups:
+                bpy.data.groups.new(lod_name)
+
+            bpy.data.groups[lod_name].objects.link(bobj)
+
+    return {"FINISHED"}
+
 def load(operator, context, filepath,
          node_mode="EMPTY",
          hide_default_player=False,
@@ -228,6 +271,7 @@ def load(operator, context, filepath,
          import_node_order=False,
          import_sequences=True,
          debug_report=False):
+    return load_new(operator, context, filepath)
     shape = DtsShape()
 
     with open(filepath, "rb") as fd:

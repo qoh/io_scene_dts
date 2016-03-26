@@ -86,6 +86,7 @@ def save(operator, context, filepath,
             return fail(operator, "The following nodes were found in the 'NodeOrder' text block but do not exist in the shape. This means that you may have removed nodes from a skeleton when you shouldn't have, or that you forgot to remove the 'NodeOrder' text block:\n{}".format(", ".join(missing_nodes)))
 
     node_index = {node_ob[name]: i for i, name in enumerate(dsq.nodes)}
+    auto_root_index = None
     animated_nodes = []
 
     for node in dsq.nodes:
@@ -93,6 +94,7 @@ def save(operator, context, filepath,
         data = ob.animation_data
         if data and data.action and len(data.action.fcurves):
             animated_nodes.append(ob)
+
 
     for bobj in scene.objects:
         if bobj.type != "MESH":
@@ -102,10 +104,11 @@ def save(operator, context, filepath,
             continue
 
         if not bobj.parent:
-            if not auto_root_index:
+            if auto_root_index is None:
                 if "NodeOrder" in bpy.data.texts and "__auto_root__" not in order_key:
                     return fail(operator, "The mesh '{}' does not have a parent. Normally, the exporter would create a temporary parent for you to fix this, but you have a specified NodeOrder (may be created by previously importing a DTS file and not pressing Ctrl+N after you're done with it), which does not have the '__auto_root__' entry (name used for the automatic parent).".format(bobj.name))
 
+                auto_root_index = len(dsq.nodes)
                 dsq.nodes.append("__auto_root__")
 
     sequences = {}

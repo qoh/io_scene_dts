@@ -1,0 +1,46 @@
+import os
+
+texture_extensions = ("png", "jpg")
+
+default_materials = {
+    "black": (0, 0, 0),
+    "black25": (191, 191, 191),
+    "black50": (128, 128, 128),
+    "black75": (64, 64, 64),
+    "blank": (255, 255, 255),
+    "blue": (0, 0, 255),
+    "darkRed": (128, 0, 0),
+    "gray25": (64, 64, 64),
+    "gray50": (128, 128, 128),
+    "gray75": (191, 191, 191),
+    "green": (26, 128, 64),
+    "lightBlue": (10, 186, 245),
+    "lightYellow": (249, 249, 99),
+    "palegreen": (125, 136, 104),
+    "red": (213, 0, 0),
+    "white": (255, 255, 255),
+    "yellow": (255, 255, 0)
+}
+
+for key, value in tuple(default_materials.items()):
+    default_materials[key.lower()] = value
+
+def resolve_texture(filepath, name):
+    dirname = os.path.dirname(filepath)
+
+    while True:
+        texbase = os.path.join(dirname, dmat.name)
+
+        for extension in texture_extensions:
+            texname = texbase + "." + extension
+
+            if os.path.isfile(texname):
+                return texname
+
+        if found_tex or os.path.ismount(dirname):
+            break
+
+        prevdir, dirname = dirname, os.path.dirname(dirname)
+
+        if prevdir == dirname:
+            break

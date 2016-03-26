@@ -1,4 +1,4 @@
-import bpy, bmesh
+import bpy, bmesh, os
 from math import sqrt, pi
 from operator import attrgetter
 from itertools import groupby
@@ -6,6 +6,7 @@ from itertools import groupby
 from .DtsShape import DtsShape
 from .DtsTypes import *
 from .write_report import write_debug_report
+from .util import resolve_texture, default_materials
 
 import re
 # re really isn't necessary. oh well.
@@ -68,6 +69,7 @@ def export_material(mat, shape):
         shape.iflmaterials.append(ifl)
 
     material = Material(name=mat.name, flags=flags)
+    material.bl_mat = mat
 
     if "texture" in mat:
       material.name = mat["texture"]
@@ -125,6 +127,7 @@ def transform_normal(ob, normal):
 
 def save(operator, context, filepath,
          blank_material=True,
+         generate_texture="disabled",
          never_split=False,
          apply_modifiers=True,
          transform_mesh=True,
@@ -649,6 +652,29 @@ def save(operator, context, filepath,
         write_debug_report(filepath + ".txt", shape)
 
     shape.verify()
+
+    if generate_texture != "disabled":
+        f_lookup = generate_texture in ("custom-missing", "all-missing")
+        f_custom = generate_texture in ("custom-missing", "custom-always")
+
+        for material in shape.materials:
+            if not hasattr(material, "bl_mat"):
+                continue
+
+            if f_custom and material.name.lower() in default_materials:
+                continue
+
+            if f_lookup and resolve_texture(material.name) is not None:
+                continue
+
+            bl_mat = material.bl_mat
+            color = bl_mat.diffuse_color * bl_mat.diffuse_intensity
+
+            image = bpy.data.images.new(material.name.lower() + "_generated", 16, 16)
+            image.pixels = (color.r, color.g, color.b, 1.0) * 256
+            image.filepath_raw = os.path.join(os.path.dirname(filepath), material.name + ".png")
+            image.file_format = "PNG"
+            image.save()
 
     with open(filepath, "wb") as fd:
         shape.save(fd)
