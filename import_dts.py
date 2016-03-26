@@ -181,31 +181,122 @@ def ob_rotation_curves(ob):
 
   return ob.rotation_mode, ob_curves_array(ob, data_path, array_count)
 
-def load_new(operator, context, filepath):
+def get_node_head(i, node, shape):
+    return node.mat.to_translation()
+
+def get_node_tail(i, node, shape):
+    # ischildfound = False
+    # childbone = None
+    # childbonelist = []
+    # for j, other in enumerate(shape.nodes):
+    #     if other.parent == i:
+    #         ischildfound = True
+    #         childbone = other
+    #         childbonelist.append(other)
+    #
+    # if ischildfound:
+    #     tmp_head = Vector((0, 0, 0))
+    #     for other in childbonelist:
+    #         tmp_head[0] += other.head[0]
+    #         tmp_head[1] += other.head[1]
+    #         tmp_head[2] += other.head[2]
+    #     tmp_head[0] /= len(childbonelist)
+    #     tmp_head[1] /= len(childbonelist)
+    #     tmp_head[2] /= len(childbonelist)
+    #     return tmp_head
+    # elif node.parent != -1:
+    #     parent = shape.nodes[node.parent]
+    #
+    #     tmp_len = 0.0
+    #     tmp_len += (node.head[0] - parent.head[0]) ** 2
+    #     tmp_len += (node.head[1] - parent.head[1]) ** 2
+    #     tmp_len += (node.head[2] - parent.head[2]) ** 2
+    #     tmp_len = tmp_len ** 0.5 * 0.5
+    #
+    #     return Vector((
+    #         node.head[0] + tmp_len * node.mat[0][0],
+    #         node.head[1] + tmp_len * node.mat[1][0],
+    #         node.head[2] + tmp_len * node.mat[2][0]))
+    # else:
+    return node.head + Vector((0, 0, 0.25))
+
+def file_base_name(filepath):
+    return os.path.basename(filepath).rsplit(".", 1)[0]
+
+def load_new(operator, context, filepath,
+             hacky_new_bone_connect=True):
     shape = DtsShape()
 
     with open(filepath, "rb") as fd:
         shape.load(fd)
 
-    root_arm = bpy.data.armatures.new("scene")
+    root_arm = bpy.data.armatures.new(file_base_name(filepath))
     root_ob = bpy.data.objects.new(root_arm.name, root_arm)
 
     context.scene.objects.link(root_ob)
     context.scene.objects.active = root_ob
+
+    root_ob.show_x_ray = True
+
+    # Preprocess our bones with magic spice?
+    for i, node in enumerate(shape.nodes):
+        node.mat = shape.default_rotations[i].to_matrix()
+        node.mat = Matrix.Translation(shape.default_translations[i]) * node.mat.to_4x4()
+
+        if node.parent != -1:
+            node.mat = shape.nodes[node.parent].mat * node.mat
+
+    for i, node in enumerate(shape.nodes):
+        node.head = get_node_head(i, node, shape)
+
+    for i, node in enumerate(shape.nodes):
+        node.tail = get_node_tail(i, node, shape)
+        node.has_any_users = False
+
+    for obj in shape.objects:
+        if shape.names[obj.name] not in blockhead_nodes:
+            continue
+
+        node = obj.node
+
+        while node != -1:
+            shape.nodes[node].has_any_users = True
+            node = shape.nodes[node].parent
 
     bpy.ops.object.mode_set(mode="EDIT")
 
     bones_indexed = []
 
     for i, node in enumerate(shape.nodes):
+        if not node.has_any_users:
+            bones_indexed.append(True)
+            continue
+
         bone = root_arm.edit_bones.new(shape.names[node.name])
 
-        bone.head = (0, 0, 0)
-        bone.tail = (0, 0, 1)
-        bone.roll = 0
+        if hacky_new_bone_connect:
+            bone.use_connect = True
 
         if node.parent != -1:
-            bone.parent = bones_indexed[node.parent]
+            parent_bone = bones_indexed[node.parent]
+
+            bone.parent = parent_bone
+            bone.head = node.head
+            bone.tail = node.tail
+
+            vp = bone.parent.tail - bone.parent.head
+            vc = bone.tail - bone.head
+            vc.normalize()
+            vp.normalize()
+
+            if vp.dot(vc) > -0.8:
+                bone.roll = bone.parent.roll
+            else:
+                bone.roll = -bone.parent.roll
+        else:
+            bone.head = node.head
+            bone.tail = node.tail
+            bone.roll = math.radians(90)
 
         bones_indexed.append(bone)
 
@@ -231,6 +322,9 @@ def load_new(operator, context, filepath):
         detail_by_index[lod.objectDetail] = lod
 
     for obj in shape.objects:
+        if shape.names[obj.name] not in blockhead_nodes:
+            continue
+
         for index in range(obj.numMeshes):
             mesh = shape.meshes[obj.firstMesh + index]
 
@@ -248,9 +342,11 @@ def load_new(operator, context, filepath):
 
             if obj.node != -1:
                 # bobj.location = bones_indexed[obj.node].head
+                # bobj.matrix_world = shape.nodes[obj.node].mat
                 bobj.parent = root_ob
                 bobj.parent_bone = bones_indexed[obj.node].name
                 bobj.parent_type = "BONE"
+                bobj.matrix_world = shape.nodes[obj.node].mat
 
             if shape.names[obj.name] not in blockhead_nodes:
                 bobj.hide = True
@@ -270,8 +366,11 @@ def load(operator, context, filepath,
          skeleton_only=False,
          import_node_order=False,
          import_sequences=True,
-         debug_report=False):
-    return load_new(operator, context, filepath)
+         debug_report=False,
+         hacky_new_bone_import=False,
+         hacky_new_bone_connect=True):
+    if hacky_new_bone_import:
+        return load_new(operator, context, filepath, hacky_new_bone_connect)
     shape = DtsShape()
 
     with open(filepath, "rb") as fd:

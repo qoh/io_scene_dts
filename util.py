@@ -29,7 +29,7 @@ def resolve_texture(filepath, name):
     dirname = os.path.dirname(filepath)
 
     while True:
-        texbase = os.path.join(dirname, dmat.name)
+        texbase = os.path.join(dirname, name)
 
         for extension in texture_extensions:
             texname = texbase + "." + extension
@@ -37,7 +37,7 @@ def resolve_texture(filepath, name):
             if os.path.isfile(texname):
                 return texname
 
-        if found_tex or os.path.ismount(dirname):
+        if os.path.ismount(dirname):
             break
 
         prevdir, dirname = dirname, os.path.dirname(dirname)
