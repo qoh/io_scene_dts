@@ -239,13 +239,13 @@ def save(operator, context, filepath,
                 lod_size = 32 # setting?
 
             print("Creating LOD '{}' (size {})".format(lod_name, lod_size))
-            scene_lods[lod_name] = DetailLevel(lod_name_index, lod_size, 0, -1)
+            scene_lods[lod_name] = DetailLevel(name=lod_name_index, subshape=0, objectDetail=-1, size=lod_size)
             shape.detail_levels.append(scene_lods[lod_name])
 
         name = bobj.name
 
         if name not in scene_objects:
-            object = Object(shape.name(name), attach_node, 0, 0)
+            object = Object(shape.name(name), numMeshes=0, firstMesh=0, node=attach_node)
             object_index = len(shape.objects)
             shape.objects.append(object)
             shape.objectstates.append(ObjectState(1.0, 0, 0))
