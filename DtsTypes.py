@@ -40,7 +40,7 @@ class Node:
 		return obj
 
 class Object:
-	def __init__(self, name, numMeshes, firstMesh, node):
+	def __init__(self, name, node, numMeshes=0, firstMesh=0):
 		self.name = name
 		self.numMeshes = numMeshes
 		self.firstMesh = firstMesh
@@ -121,7 +121,7 @@ class Trigger:
 		return cls(stream.read32(), stream.read_float())
 
 class DetailLevel:
-	def __init__(self, name, subshape, objectDetail, size, avgError=-1.0, maxError=-1.0, polyCount=0):
+	def __init__(self, name, size, subshape, objectDetail):
 		self.name = name
 		self.subshape = subshape
 		self.objectDetail = objectDetail
