@@ -1,5 +1,9 @@
 import os
 
+from colorsys import hsv_to_rgb
+from itertools import count
+from fractions import Fraction
+
 texture_extensions = ("png", "jpg")
 
 default_materials = {
@@ -44,3 +48,19 @@ def resolve_texture(filepath, name):
 
         if prevdir == dirname:
             break
+
+def fractions():
+    yield 0
+
+    for k in count():
+        i = 2 ** k
+
+        for j in range(1, i, 2):
+            yield j / i
+
+def get_hsv_colors():
+    for h in fractions():
+        yield (h, 0.75, 0.75)
+
+def get_rgb_colors():
+    return map(lambda hsv: hsv_to_rgb(*hsv), get_hsv_colors())

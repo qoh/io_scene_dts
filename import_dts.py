@@ -5,7 +5,7 @@ from bpy_extras.io_utils import unpack_list
 from .DtsShape import DtsShape
 from .DtsTypes import *
 from .write_report import write_debug_report
-from .util import default_materials, resolve_texture
+from .util import default_materials, resolve_texture, get_rgb_colors
 
 import operator
 from functools import reduce
@@ -16,7 +16,7 @@ blockhead_nodes = ("HeadSkin", "chest", "Larm", "Lhand", "Rarm", "Rhand", "pants
 for name, color in default_materials.items():
     default_materials[name] = (color[0] / 255, color[1] / 255, color[2] / 255)
 
-def import_material(dmat, filepath):
+def import_material(color_source, dmat, filepath):
     bmat = bpy.data.materials.new(dmat.name)
 
     texname = resolve_texture(filepath, dmat.name)
@@ -33,7 +33,8 @@ def import_material(dmat, filepath):
     elif dmat.name.lower() in default_materials:
         bmat.diffuse_color = default_materials[dmat.name.lower()]
     else: # give it a random color
-        bmat.diffuse_color = (random(), random(), random())
+        bmat.diffuse_color = color_source.__next__()
+        bmat.diffuse_intensity = 1
 
     if dmat.flags & Material.SelfIlluminating:
         bmat.use_shadeless = True
@@ -303,9 +304,10 @@ def load_new(operator, context, filepath,
     bpy.ops.object.mode_set(mode="OBJECT")
 
     materials = {}
+    color_source = get_rgb_colors()
 
     for dmat in shape.materials:
-        materials[dmat] = import_material(dmat, filepath)
+        materials[dmat] = import_material(color_source, dmat, filepath)
 
     # Now assign IFL material properties where needed
     for ifl in shape.iflmaterials:
@@ -383,10 +385,11 @@ def load(operator, context, filepath,
 
     # Create a Blender material for each DTS material
     materials = {}
+    color_source = get_rgb_colors()
 
     if not skeleton_only:
         for dmat in shape.materials:
-            materials[dmat] = import_material(dmat, filepath)
+            materials[dmat] = import_material(color_source, dmat, filepath)
 
         # Now assign IFL material properties where needed
         for ifl in shape.iflmaterials:
