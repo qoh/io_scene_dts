@@ -124,6 +124,7 @@ def create_bmesh(dmesh, materials, shape):
     uvs = me.uv_layers[0]
 
     for i, ((verts, dmat), poly) in enumerate(zip(faces, me.polygons)):
+        poly.use_smooth = True # DTS geometry is always smooth shaded
         poly.loop_total = 3
         poly.loop_start = i * 3
 
