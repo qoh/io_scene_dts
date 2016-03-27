@@ -439,6 +439,10 @@ def save(operator, context, filepath,
     #         shape.smallest_size = lod.size
     #         shape.smallest_detail_level = i
 
+    total_verts = sum(map(lambda me: len(me.verts), shape.meshes))
+    total_index = sum(map(lambda me: len(me.indices), shape.meshes))
+    print("total_verts = {}, total_index = {}".format(total_verts, total_index))
+
     shape.bounds = Box(
         Vector(( 10e30,  10e30,  10e30)),
         Vector((-10e30, -10e30, -10e30)))
@@ -664,7 +668,7 @@ def save(operator, context, filepath,
             if f_custom and material.name.lower() in default_materials:
                 continue
 
-            if f_lookup and resolve_texture(material.name) is not None:
+            if f_lookup and resolve_texture(filepath, material.name) is not None:
                 continue
 
             bl_mat = material.bl_mat
