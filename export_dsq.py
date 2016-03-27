@@ -11,23 +11,6 @@ def fail(operator, message):
     operator.report({"ERROR"}, message)
     return {"FINISHED"}
 
-def rotation_from_ob(ob):
-    if ob.rotation_mode == "QUATERNION":
-        r = ob.rotation_quaternion
-    elif ob.rotation_mode == "AXIS_ANGLE":
-        print("Warning: '{}' uses unsupported axis angle rotation".format(ob.name))
-        r = ob.rotation_quaternion # ob.rotation_axis_angle
-    else:
-        r = ob.rotation_euler.to_quaternion()
-    return r
-
-def export_all_nodes(node_ob, dsq, obs):
-    for ob in obs:
-        if ob.type == "ARMATURE" or ob.type == "EMPTY":
-            node_ob[ob.name] = ob
-            dsq.nodes.append(ob.name)
-            export_all_nodes(node_ob, dsq, ob.children)
-
 def evaluate_all(curves, frame):
     return tuple(map(lambda c: c.evaluate(frame), curves))
 
@@ -67,7 +50,18 @@ def save(operator, context, filepath,
 
     # Create a DTS node for every armature/empty in the scene
     node_ob = {}
-    export_all_nodes(node_ob, dsq, filter(lambda o: not o.parent, scene.objects))
+
+    def traverse_node(node):
+        node_ob[node.name] = node
+        dsq.nodes.append(node.name)
+
+        for child in node.children:
+            if child.type == "EMPTY":
+                traverse_node(child)
+
+    for ob in scene.objects:
+        if ob.type == "EMPTY" and not ob.parent:
+            traverse_node(ob)
 
     # Figure out if we should create our own root node
     if "NodeOrder" in bpy.data.texts:
@@ -95,9 +89,8 @@ def save(operator, context, filepath,
         if data and data.action and len(data.action.fcurves):
             animated_nodes.append(ob)
 
-
     for bobj in scene.objects:
-        if bobj.type != "MESH":
+        if bobj.type != "MESH" or bobj.name.lower() == "bounds":
             continue
 
         if bobj.users_group and bobj.users_group[0].name == "__ignore__":
@@ -105,8 +98,8 @@ def save(operator, context, filepath,
 
         if not bobj.parent:
             if auto_root_index is None:
-                if "NodeOrder" in bpy.data.texts and "__auto_root__" not in order_key:
-                    return fail(operator, "The mesh '{}' does not have a parent. Normally, the exporter would create a temporary parent for you to fix this, but you have a specified NodeOrder (may be created by previously importing a DTS file and not pressing Ctrl+N after you're done with it), which does not have the '__auto_root__' entry (name used for the automatic parent).".format(bobj.name))
+                # if "NodeOrder" in bpy.data.texts and "__auto_root__" not in order_key:
+                #     return fail(operator, "The mesh '{}' does not have a parent. Normally, the exporter would create a temporary parent for you to fix this, but you have a specified NodeOrder (may be created by previously importing a DTS file and not pressing Ctrl+N after you're done with it), which does not have the '__auto_root__' entry (name used for the automatic parent).".format(bobj.name))
 
                 auto_root_index = len(dsq.nodes)
                 dsq.nodes.append("__auto_root__")

@@ -66,16 +66,23 @@ def import_material(color_source, dmat, filepath):
 
     return bmat
 
+class index_pass:
+    def __getitem__(self, item):
+        return item
+
 def create_bmesh(dmesh, materials, shape):
     me = bpy.data.meshes.new("Mesh")
 
     faces = []
     material_indices = {}
 
-    indices = dmesh.indices
+    indices_pass = index_pass()
 
     for prim in dmesh.primitives:
-        assert prim.type & Primitive.Indexed
+        if prim.type & Primitive.Indexed:
+            indices = dmesh.indices
+        else:
+            indices = indices_pass
 
         dmat = None
 
@@ -363,9 +370,7 @@ def load_new(operator, context, filepath,
     return {"FINISHED"}
 
 def load(operator, context, filepath,
-         node_mode="EMPTY",
          hide_default_player=False,
-         skeleton_only=False,
          import_node_order=False,
          import_sequences=True,
          debug_report=False,
@@ -387,18 +392,17 @@ def load(operator, context, filepath,
     materials = {}
     color_source = get_rgb_colors()
 
-    if not skeleton_only:
-        for dmat in shape.materials:
-            materials[dmat] = import_material(color_source, dmat, filepath)
+    for dmat in shape.materials:
+        materials[dmat] = import_material(color_source, dmat, filepath)
 
-        # Now assign IFL material properties where needed
-        for ifl in shape.iflmaterials:
-            mat = materials[shape.materials[ifl.slot]]
-            assert mat["ifl"] == True
-            mat["iflName"] = shape.names[ifl.name]
-            mat["iflFirstFrame"] = ifl.firstFrame
-            mat["iflNumFrames"] = ifl.numFrames
-            mat["iflTime"] = ifl.time
+    # Now assign IFL material properties where needed
+    for ifl in shape.iflmaterials:
+        mat = materials[shape.materials[ifl.slot]]
+        assert mat["ifl"] == True
+        mat["iflName"] = shape.names[ifl.name]
+        mat["iflFirstFrame"] = ifl.firstFrame
+        mat["iflNumFrames"] = ifl.numFrames
+        mat["iflTime"] = ifl.time
 
     # First load all the nodes into armatures
     lod_by_mesh = {}
@@ -417,26 +421,21 @@ def load(operator, context, filepath,
     node_obs = []
     node_obs_val = {}
 
-    if node_mode == "EMPTY":
-        for i, node in enumerate(shape.nodes):
-            ob = bpy.data.objects.new(shape.names[node.name], None)
-            ob.empty_draw_type = "SINGLE_ARROW"
-            ob.empty_draw_size = 0.5
+    for i, node in enumerate(shape.nodes):
+        ob = bpy.data.objects.new(shape.names[node.name], None)
+        ob.empty_draw_type = "SINGLE_ARROW"
+        ob.empty_draw_size = 0.5
 
-            if node.parent != -1:
-                ob.parent = node_obs[node.parent]
+        if node.parent != -1:
+            ob.parent = node_obs[node.parent]
 
-            ob.location = shape.default_translations[i]
-            ob.rotation_mode = "QUATERNION"
-            ob.rotation_quaternion = shape.default_rotations[i]
+        ob.location = shape.default_translations[i]
+        ob.rotation_mode = "QUATERNION"
+        ob.rotation_quaternion = shape.default_rotations[i]
 
-            context.scene.objects.link(ob)
-            node_obs.append(ob)
-            node_obs_val[node] = ob
-    elif node_mode == "ARMATURE":
-        pass
-    elif node_mode == "BONE":
-        pass
+        context.scene.objects.link(ob)
+        node_obs.append(ob)
+        node_obs_val[node] = ob
 
     # Try animation?
     if import_sequences:
@@ -537,42 +536,35 @@ def load(operator, context, filepath,
 
         sequences_buf.from_string("\n".join(sequences_text))
 
-    if not skeleton_only:
-        # Then put objects in the armatures
-        for obj in shape.objects:
-            for meshIndex in range(obj.numMeshes):
-                mesh = shape.meshes[obj.firstMesh + meshIndex]
+    # Then put objects in the armatures
+    for obj in shape.objects:
+        for meshIndex in range(obj.numMeshes):
+            mesh = shape.meshes[obj.firstMesh + meshIndex]
 
-                if mesh.type == Mesh.NullType:
-                    continue
+            if mesh.type == Mesh.NullType:
+                continue
 
-                if mesh.type != Mesh.StandardType:
-                    print("{} is a {} mesh, unsupported, but trying".format(
-                        shape.names[obj.name], mesh.type))
-                    # continue
+            if mesh.type != Mesh.StandardType:
+                print("{} is a {} mesh, unsupported, but trying".format(
+                    shape.names[obj.name], mesh.type))
+                # continue
 
-                bmesh = create_bmesh(mesh, materials, shape)
-                bobj = bpy.data.objects.new(name=shape.names[obj.name], object_data=bmesh)
-                context.scene.objects.link(bobj)
+            bmesh = create_bmesh(mesh, materials, shape)
+            bobj = bpy.data.objects.new(name=shape.names[obj.name], object_data=bmesh)
+            context.scene.objects.link(bobj)
 
-                if obj.node != -1:
-                    if node_mode == "BONE":
-                        bobj.location = node_obs[obj.node].head
-                        bobj.parent = armature_ob
-                        bobj.parent_bone = node_obs[obj.node].name
-                        bobj.parent_type = "BONE"
-                    else:
-                        bobj.parent = node_obs[obj.node]
+            if obj.node != -1:
+                bobj.parent = node_obs[obj.node]
 
-                if hide_default_player and shape.names[obj.name] not in blockhead_nodes:
-                    bobj.hide = True
+            if hide_default_player and shape.names[obj.name] not in blockhead_nodes:
+                bobj.hide = True
 
-                lod_name = shape.names[lod_by_mesh[meshIndex].name]
+            lod_name = shape.names[lod_by_mesh[meshIndex].name]
 
-                if lod_name not in bpy.data.groups:
-                    bpy.data.groups.new(lod_name)
+            if lod_name not in bpy.data.groups:
+                bpy.data.groups.new(lod_name)
 
-                bpy.data.groups[lod_name].objects.link(bobj)
+            bpy.data.groups[lod_name].objects.link(bobj)
 
     # Import a bounds mesh
     me = bpy.data.meshes.new("Mesh")

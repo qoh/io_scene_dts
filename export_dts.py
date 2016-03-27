@@ -78,12 +78,17 @@ def export_material(mat, shape):
 
     return material_index
 
+def seq_float_eq(a, b):
+    return all(abs(i - j) < 0.000001 for i, j in zip(a, b))
+
 def export_all_nodes(lookup, shape, obs, parent=-1):
     for ob in obs:
-        if ob.type == "ARMATURE" or ob.type == "EMPTY":
+        # if ob.type == "ARMATURE" or ob.type == "EMPTY":
+        # Armature nodes disabled. What could go wrong?
+        if ob.type == "EMPTY":
             loc, rot, scale = ob.matrix_local.decompose()
 
-            if scale != Vector((1, 1, 1)):
+            if not seq_float_eq((1, 1, 1), scale):
                 print("Warning: '{}' uses scale, which cannot be exported to DTS nodes".format(ob.name))
 
             node = Node(shape.name(ob.name), parent)
@@ -128,11 +133,9 @@ def transform_normal(ob, normal):
 def save(operator, context, filepath,
          blank_material=True,
          generate_texture="disabled",
-         never_split=False,
          apply_modifiers=True,
          transform_mesh=True,
-         sloppy=False,
-         debug_report=True):
+         debug_report=False):
     print("Exporting scene to DTS")
 
     scene = context.scene
@@ -209,19 +212,16 @@ def save(operator, context, filepath,
 
         if bobj.parent:
             if bobj.parent not in node_lookup:
-                if sloppy:
-                    print("Warning: Mesh '{}' has a '{}' parent, ignoring".format(bobj.name, bobj.parent.type))
-                    continue
-                else:
-                    return fail(operator, "The mesh '{}' has a parent of type '{}' (named '{}'). You can only parent meshes to empties/armatures, not other meshes.")
+                return fail(operator, "The mesh '{}' has a parent of type '{}' (named '{}'). You can only parent meshes to empties, not other meshes.".format(bobj.name, bobj.parent.type, bobj.parent.name))
 
             attach_node = node_lookup[bobj.parent]
         else:
             print("Warning: Mesh '{}' has no parent".format(bobj.name))
 
             if auto_root_index is None:
-                if "NodeOrder" in bpy.data.texts and "__auto_root__" not in order_key:
-                    return fail(operator, "The mesh '{}' does not have a parent. Normally, the exporter would create a temporary parent for you to fix this, but you have a specified NodeOrder (may be created by previously importing a DTS file and not pressing Ctrl+N after you're done with it), which does not have the '__auto_root__' entry (name used for the automatic parent).".format(bobj.name))
+                # This check has been disabled for now. What could go wrong?!
+                # if "NodeOrder" in bpy.data.texts and "__auto_root__" not in order_key:
+                #     return fail(operator, "The mesh '{}' does not have a parent. Normally, the exporter would create a temporary parent for you to fix this, but you have a specified NodeOrder (may be created by previously importing a DTS file and not pressing Ctrl+N after you're done with it), which does not have the '__auto_root__' entry (name used for the automatic parent).".format(bobj.name))
 
                 auto_root_index = len(shape.nodes)
                 shape.nodes.append(Node(shape.name("__auto_root__")))
@@ -309,20 +309,6 @@ def save(operator, context, filepath,
 
                 dmesh.b_matrix_world = bobj.matrix_world
 
-                for vertex in mesh.vertices:
-                    if transform_mesh:
-                        dmesh.verts.append(transform_co(bobj, vertex.co))
-                    else:
-                        dmesh.verts.append(vertex.co.copy())
-                    if transform_mesh:
-                        dmesh.normals.append(transform_normal(bobj, vertex.normal))
-                    else:
-                        dmesh.normals.append(vertex.normal.copy())
-                    dmesh.enormals.append(0)
-                    dmesh.tverts.append(Vector((0, 0)))
-
-                got_tvert = set()
-
                 dmesh.bounds = dmesh.calculate_bounds_mat(Matrix())
                 #dmesh.center = Vector((
                 #    (dmesh.bounds.min.x + dmesh.bounds.max.x) / 2,
@@ -357,7 +343,7 @@ def save(operator, context, filepath,
                     else:
                         flags |= Primitive.NoMaterial
 
-                    firstElement = len(dmesh.indices)
+                    firstElement = len(dmesh.verts)
 
                     for poly in polys:
                         if mesh.uv_layers:
@@ -365,55 +351,34 @@ def save(operator, context, filepath,
                         else:
                             uv_layer = None
 
-                        needs_split = False
                         use_face_normal = not poly.use_smooth
 
-                        # TODO: add UVs to needs_split consideration
-                        if not poly.use_smooth:
-                            for vert_index in poly.vertices:
-                                if mesh.vertices[vert_index].normal != poly.normal:
-                                    needs_split = True
-                                    break
+                        for vert_index, loop_index in zip(reversed(poly.vertices), reversed(poly.loop_indices)):
+                            dmesh.indices.append(len(dmesh.indices))
 
-                        if needs_split and not never_split: # TODO: verify that this works properly
-                            vertices = tuple(range(len(dmesh.verts), len(dmesh.verts) + len(poly.vertices)))
+                            vert = mesh.vertices[vert_index]
 
-                            for vert_index, loop_index in zip(poly.vertices, poly.loop_indices):
-                                vert = mesh.vertices[vert_index]
+                            if use_face_normal:
+                                normal = poly.normal
+                            else:
+                                normal = vert.normal
 
-                                if use_face_normal:
-                                    normal = poly.normal.copy()
-                                else:
-                                    normal = vert.normal.copy()
+                            if transform_mesh and False:
+                                dmesh.verts.append(transform_co(bobj, vert.co))
+                                dmesh.normals.append(transform_normal(bobj, normal))
+                            else:
+                                dmesh.verts.append(vert.co.copy())
+                                dmesh.normals.append(normal.copy())
 
-                                if transform_mesh:
-                                    dmesh.verts.append(transform_co(bobj, vert.co))
-                                    dmesh.normals.append(transform_normal(bobj, normal))
-                                else:
-                                    dmesh.verts.append(vert.co.copy())
-                                    dmesh.normals.append(normal.copy())
-
-                                dmesh.enormals.append(0)
-
-                                if uv_layer:
-                                    uv = uv_layer[loop_index].uv
-                                    dmesh.tverts.append(Vector((uv.x, 1 - uv.y)))
-                                else:
-                                    dmesh.tverts.append(Vector((0, 0)))
-                        else:
-                            vertices = poly.vertices
+                            dmesh.enormals.append(0)
 
                             if uv_layer:
-                                for vert_index, loop_index in zip(vertices, poly.loop_indices):
-                                    # TODO: split on multiple UV coords
-                                    uv = uv_layer[loop_index].uv
-                                    dmesh.tverts[vert_index] = Vector((uv.x, 1 - uv.y))
+                                uv = uv_layer[loop_index].uv
+                                dmesh.tverts.append(Vector((uv.x, 1 - uv.y)))
+                            else:
+                                dmesh.tverts.append(Vector((0, 0)))
 
-                        dmesh.indices.append(vertices[2])
-                        dmesh.indices.append(vertices[1])
-                        dmesh.indices.append(vertices[0])
-
-                    numElements = len(dmesh.indices) - firstElement
+                    numElements = len(dmesh.verts) - firstElement
                     dmesh.primitives.append(Primitive(firstElement, numElements, flags))
 
                 bpy.data.meshes.remove(mesh) # RIP!
@@ -421,13 +386,16 @@ def save(operator, context, filepath,
                 # ??? ? ?? ???? ??? ?
                 dmesh.vertsPerFrame = len(dmesh.verts)
 
+                if len(dmesh.indices) >= 32768:
+                    return fail(operator, "The mesh '{}' has too many vertex indices ({} >= 32768)".format(bobj.name, len(dmesh.indices)))
+
                 ### Nobody leaves Hotel California
             else:
                 # print("Adding Null mesh for object {} in LOD {}".format(shape.names[object.name], lod_name))
                 shape.meshes.append(Mesh(Mesh.NullType))
 
     print("Creating subshape with " + str(len(shape.nodes)) + " nodes and " + str(len(shape.objects)) + " objects")
-    shape.subshapes.append(Subshape(firstNode=0, firstObject=0, firstDecal=0, numNodes=len(shape.nodes), numObjects=len(shape.objects), numDecals=0))
+    shape.subshapes.append(Subshape(0, 0, 0, len(shape.nodes), len(shape.objects), 0))
 
     # Figure out all the things
     print("Computing bounds")
@@ -438,10 +406,6 @@ def save(operator, context, filepath,
     #     if lod.size >= 0 and (shape.smallest_size == None or lod.size < shape.smallest_size):
     #         shape.smallest_size = lod.size
     #         shape.smallest_detail_level = i
-
-    total_verts = sum(map(lambda me: len(me.verts), shape.meshes))
-    total_index = sum(map(lambda me: len(me.indices), shape.meshes))
-    print("total_verts = {}, total_index = {}".format(total_verts, total_index))
 
     shape.bounds = Box(
         Vector(( 10e30,  10e30,  10e30)),

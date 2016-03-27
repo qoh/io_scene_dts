@@ -50,12 +50,6 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
         default=False,
         )
 
-    skeleton_only = BoolProperty(
-            name="Skeleton only",
-            description="Do not import any meshes, only the nodes",
-            default=False,
-            )
-
     import_node_order = BoolProperty(
             name="Import node order",
             description="Creates the NodeOrder text block for compatibility with existing DSQ files for this skeleton",
@@ -83,7 +77,7 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
     hacky_new_bone_connect = BoolProperty(
         name="HackyNewBoneConnect",
         description="Requires HackyNewBoneImport, required for Auto IK",
-        default=True,
+        default=False,
         )
 
     def execute(self, context):
@@ -138,19 +132,13 @@ class ExportDTS(bpy.types.Operator, ExportHelper):
     generate_texture = EnumProperty(
             name="Generate textures",
             description="Automatically generate solid color textures for materials",
-            default="custom-missing",
+            default="disabled",
             items=(
                 ("disabled", "Disabled", "Do not generate any textures"),
                 ("custom-missing", "Custom (if missing)", "Generate textures for non-default material names if not already present"),
                 ("custom-always", "Custom (always)", "Generate textures for non-default material names"),
                 ("all-missing", "All (if missing)", "Generate textures for all materials if not already present"),
                 ("all-always", "All (always)", "Generate textures for all materials"))
-            )
-
-    never_split = BoolProperty(
-            name="Never split edges",
-            description="Optimize index count by ignoring flat shading",
-            default=False,
             )
 
     transform_mesh = BoolProperty(
