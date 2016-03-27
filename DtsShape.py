@@ -150,14 +150,14 @@ class DtsInputStream(object):
 		return unpack("f", pack("i", self.read32()))[0]
 
 	def read_string(self):
-		buffer = bytearray()
+		buf = bytearray()
 		while True:
 			byte = self.read8()
 			if byte == 0:
 				break
 			else:
-				buffer.append(byte)
-		return "".join(map(chr, buffer))
+				buf.append(byte)
+		return buf.decode("cp1252")
 
 	def read_vec3(self):
 		return Vector((self.read_float(), self.read_float(), self.read_float()))
