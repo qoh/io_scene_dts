@@ -26,6 +26,9 @@ default_materials = {
     "yellow": (255, 255, 0)
 }
 
+for name, color in default_materials.items():
+    default_materials[name] = (color[0] / 255, color[1] / 255, color[2] / 255)
+
 for key, value in tuple(default_materials.items()):
     default_materials[key.lower()] = value
 

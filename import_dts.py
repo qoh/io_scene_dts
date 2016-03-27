@@ -8,16 +8,21 @@ from .write_report import write_debug_report
 from .util import default_materials, resolve_texture, get_rgb_colors
 
 import operator
+from itertools import zip_longest
 from functools import reduce
 from random import random
 
 blockhead_nodes = ("HeadSkin", "chest", "Larm", "Lhand", "Rarm", "Rhand", "pants", "LShoe", "RShoe")
 
-for name, color in default_materials.items():
-    default_materials[name] = (color[0] / 255, color[1] / 255, color[2] / 255)
+def grouper(iterable, n, fillvalue=None):
+    "Collect data into fixed-length chunks or blocks"
+    # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx"
+    args = [iter(iterable)] * n
+    return zip_longest(*args, fillvalue=fillvalue)
 
 def import_material(color_source, dmat, filepath):
     bmat = bpy.data.materials.new(dmat.name)
+    bmat.diffuse_intensity = 1
 
     texname = resolve_texture(filepath, dmat.name)
 
@@ -28,13 +33,28 @@ def import_material(color_source, dmat, filepath):
             print("Cannot load image", texname)
 
         texslot = bmat.texture_slots.add()
+        texslot.use_map_alpha = True
         tex = texslot.texture = bpy.data.textures.new(dmat.name, "IMAGE")
         tex.image = teximg
+
+        # Try to figure out a diffuse color for solid shading
+        if teximg.size[0] <= 16 and teximg.size[1] <= 16:
+            if teximg.use_alpha:
+                pixels = grouper(teximg.pixels, 4)
+            else:
+                pixels = grouper(teximg.pixels, 3)
+
+            color = pixels.__next__()
+
+            for other in pixels:
+                if other != color:
+                    break
+            else:
+                bmat.diffuse_color = color[:3]
     elif dmat.name.lower() in default_materials:
         bmat.diffuse_color = default_materials[dmat.name.lower()]
     else: # give it a random color
         bmat.diffuse_color = color_source.__next__()
-        bmat.diffuse_intensity = 1
 
     if dmat.flags & Material.SelfIlluminating:
         bmat.use_shadeless = True
