@@ -274,11 +274,13 @@ def load_new(operator, context, filepath,
 
     bpy.ops.object.mode_set(mode="EDIT")
 
-    bones_indexed = []
+    edit_bone_table = []
+    bone_names = []
 
     for i, node in enumerate(shape.nodes):
         if not node.has_any_users:
-            bones_indexed.append(True)
+            edit_bone_table.append(True)
+            bone_names.append(None)
             continue
 
         bone = root_arm.edit_bones.new(shape.names[node.name])
@@ -287,7 +289,7 @@ def load_new(operator, context, filepath,
             bone.use_connect = True
 
         if node.parent != -1:
-            parent_bone = bones_indexed[node.parent]
+            parent_bone = edit_bone_table[node.parent]
 
             bone.parent = parent_bone
             bone.head = node.head
@@ -307,7 +309,8 @@ def load_new(operator, context, filepath,
             bone.tail = node.tail
             bone.roll = math.radians(90)
 
-        bones_indexed.append(bone)
+        edit_bone_table.append(bone)
+        bone_names.append(bone.name)
 
     bpy.ops.object.mode_set(mode="OBJECT")
 
@@ -354,7 +357,7 @@ def load_new(operator, context, filepath,
                 # bobj.location = bones_indexed[obj.node].head
                 # bobj.matrix_world = shape.nodes[obj.node].mat
                 bobj.parent = root_ob
-                bobj.parent_bone = bones_indexed[obj.node].name
+                bobj.parent_bone = bone_names[obj.node]
                 bobj.parent_type = "BONE"
                 bobj.matrix_world = shape.nodes[obj.node].mat
 
