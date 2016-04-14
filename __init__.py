@@ -192,6 +192,78 @@ class ExportDSQ(bpy.types.Operator, ExportHelper):
         keywords = self.as_keywords(ignore=("check_existing", "filter_glob"))
         return export_dsq.save(self, context, **keywords)
 
+class SplitMeshIndex(bpy.types.Operator):
+    """Split a mesh into new meshes limiting the number of indices"""
+
+    bl_idname = "mesh.split_mesh_vindex"
+    bl_label = "Split mesh by indices"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        limit = 10922
+
+        ob = context.active_object
+
+        if ob is None or ob.type != "MESH":
+            self.report({"ERROR"}, "Select a mesh object first")
+            return {"FINISHED"}
+
+        me = ob.data
+
+        out_me = None
+        out_ob = None
+
+        def split():
+            nonlocal out_me
+            nonlocal out_ob
+
+            if out_me is not None:
+                out_me.validate()
+                out_me.update()
+
+            out_me = bpy.data.meshes.new(ob.name)
+            out_ob = bpy.data.objects.new(ob.name, out_me)
+
+            context.scene.objects.link(out_ob)
+
+            # For now, copy all verts over. See what happens?
+            out_me.vertices.add(len(me.vertices))
+
+            for vert, out_vert in zip(me.vertices, out_me.vertices):
+                out_vert.co = vert.co
+                out_vert.normal = vert.normal
+
+        split()
+
+        for poly in me.polygons:
+            if poly.loop_total >= limit:
+                continue
+
+            if len(out_me.loops) + poly.loop_total > limit:
+                split()
+
+            loop_start = len(out_me.loops)
+            out_me.loops.add(poly.loop_total)
+
+            out_me.polygons.add(1)
+            out_poly = out_me.polygons[-1]
+
+            out_poly.loop_start = loop_start
+            out_poly.loop_total = poly.loop_total
+            out_poly.use_smooth = poly.use_smooth
+
+            for loop_index, out_loop_index in zip(poly.loop_indices, out_poly.loop_indices):
+                loop = me.loops[loop_index]
+                out_loop = out_me.loops[out_loop_index]
+
+                out_loop.normal = loop.normal
+                out_loop.vertex_index = loop.vertex_index
+
+        out_me.validate()
+        out_me.update()
+
+        return {"FINISHED"}
+
 def menu_func_import_dts(self, context):
     self.layout.operator(ImportDTS.bl_idname, text="Torque (.dts)")
 

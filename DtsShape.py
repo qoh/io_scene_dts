@@ -51,19 +51,20 @@ class DtsOutputStream(object):
 
 	def write32(self, *values):
 		for value in values:
-			assert -2147483648 <= value <= 2147483647
+			assert -2147483648 <= value <= 2147483647, "value {} out of range".format(value)
 			assert type(value) == int, "type is {}, must be {}".format(type(value), int)
 		self.buffer32.extend(values)
 
 	def write16(self, *values):
-		for value in values:
-			assert -32768 <= value <= 32767
-			assert type(value) == int, "type is {}, must be {}".format(type(value), int)
-		self.buffer16.extend(values)
+		#for value in values:
+		#	assert -32768 <= value <= 32767, "value {} out of range".format(value)
+		#	assert type(value) == int, "type is {}, must be {}".format(type(value), int)
+		#self.buffer16.extend(values)
+		self.buffer16.extend(map(lambda v: c_short(int(v)).value, values))
 
 	def write8(self, *values):
 		for value in values:
-			assert -128 <= value <= 127
+			assert -128 <= value <= 127, "value {} out of range".format(value)
 			assert type(value) == int, "type is {}, must be {}".format(type(value), int)
 		self.buffer8.extend(values)
 

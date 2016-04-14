@@ -386,8 +386,8 @@ def save(operator, context, filepath,
                 # ??? ? ?? ???? ??? ?
                 dmesh.vertsPerFrame = len(dmesh.verts)
 
-                if len(dmesh.indices) >= 32768:
-                    return fail(operator, "The mesh '{}' has too many vertex indices ({} >= 32768)".format(bobj.name, len(dmesh.indices)))
+                if len(dmesh.indices) >= 65536:
+                    return fail(operator, "The mesh '{}' has too many vertex indices ({} >= 65536)".format(bobj.name, len(dmesh.indices)))
 
                 ### Nobody leaves Hotel California
             else:
