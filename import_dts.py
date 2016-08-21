@@ -473,12 +473,13 @@ def load(operator, context, filepath,
             print("Importing sequence", name)
 
             flags = []
+            flags.append("priority {}".format(seq.priority))
 
             if seq.flags & Sequence.Cyclic:
                 flags.append("cyclic")
 
             if seq.flags & Sequence.Blend:
-                flags.append("blend {}".format(seq.priority))
+                flags.append("blend")
 
             if flags:
                 sequences_text.append(name + ": " + ", ".join(flags))

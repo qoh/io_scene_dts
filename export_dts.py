@@ -503,17 +503,19 @@ def save(operator, context, filepath,
         seq = Sequence()
         seq.nameIndex = shape.name(name)
         seq.flags = Sequence.AlignedScale
+        seq.priority = 1
 
         if name in sequence_flags:
             for part in sequence_flags[name]:
                 flag, *data = part.split(" ", 1)
                 if data: data = data[0]
 
-                if flag == "cyclic":
+                if flag == "priority":
+                    seq.priority = int(data)
+                elif flag == "cyclic":
                     seq.flags |= Sequence.Cyclic
                 elif flag == "blend":
                     seq.flags |= Sequence.Blend
-                    seq.priority = int(data)
                 else:
                     print("Warning: Unknown flag '{}' (used by sequence '{}')".format(flag, name))
 
