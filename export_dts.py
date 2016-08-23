@@ -20,6 +20,15 @@ def fail(operator, message):
     operator.report({"ERROR"}, message)
     return {"FINISHED"}
 
+def linearrgb_to_srgb(c):
+    if c < 0.0031308:
+        if c < 0:
+            return 0
+        else:
+            return c * 12.92
+    else:
+        return 1.055 * (c ** (1.0 / 2.4)) - 0.055
+
 def export_material(mat, shape):
     # print("Exporting material", mat.name)
 
@@ -639,6 +648,9 @@ def save(operator, context, filepath,
 
             bl_mat = material.bl_mat
             color = bl_mat.diffuse_color * bl_mat.diffuse_intensity
+            color.r = linearrgb_to_srgb(color.r)
+            color.g = linearrgb_to_srgb(color.g)
+            color.b = linearrgb_to_srgb(color.b)
 
             image = bpy.data.images.new(material.name.lower() + "_generated", 16, 16)
             image.pixels = (color.r, color.g, color.b, 1.0) * 256
