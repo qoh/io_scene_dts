@@ -184,9 +184,7 @@ def save(operator, context, filepath,
 
         frame_start = markers["start"].frame
         frame_end = markers["end"].frame
-
         frame_range = frame_end - frame_start + 1
-        frame_step = 1 # TODO: GCD of keyframe spacings
 
         seq.toolBegin = frame_start
         seq.duration = frame_range * (context.scene.render.fps_base / context.scene.render.fps)
@@ -244,16 +242,7 @@ def save(operator, context, filepath,
                 seq_curves_scale.append(curves_scale)
                 seq.scaleMatters[index] = True
 
-        frame_indices = []
-        frame_current = frame_start
-
-        while frame_current <= frame_end:
-            frame_indices.append(frame_current)
-
-            if frame_current == frame_end:
-                break
-
-            frame_current = min(frame_end, frame_current + frame_step)
+        frame_indices = list(range(frame_start, frame_end + 1))
 
         for (curves, mode) in seq_curves_rotation:
             for frame in frame_indices:
