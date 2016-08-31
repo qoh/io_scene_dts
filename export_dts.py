@@ -20,6 +20,9 @@ def fail(operator, message):
     operator.report({"ERROR"}, message)
     return {"FINISHED"}
 
+def undup_name(n):
+    return n.split("#", 1)[0]
+
 def linearrgb_to_srgb(c):
     if c < 0.0031308:
         if c < 0:
@@ -77,7 +80,7 @@ def export_material(mat, shape):
             time=mat.get("iflTime", 0))
         shape.iflmaterials.append(ifl)
 
-    material = Material(name=mat.name, flags=flags)
+    material = Material(name=undup_name(mat.name), flags=flags)
     material.bl_mat = mat
 
     if "texture" in mat:
@@ -100,7 +103,12 @@ def export_all_nodes(lookup, shape, obs, parent=-1):
             if not seq_float_eq((1, 1, 1), scale):
                 print("Warning: '{}' uses scale, which cannot be exported to DTS nodes".format(ob.name))
 
-            node = Node(shape.name(ob.name), parent)
+            if "name" in ob:
+                name = ob["name"]
+            else:
+                name = undup_name(ob.name)
+
+            node = Node(shape.name(name), parent)
             node.bl_ob = ob
             node.translation = loc
             node.rotation = rot
@@ -201,17 +209,22 @@ def save(operator, context, filepath,
             continue
 
         if bobj.name.lower() == "bounds":
-          if bounds_ob:
-            print("Warning: Multiple 'bounds' objects found - check capitalization")
-          bounds_ob = bobj
-          continue
+            if bounds_ob:
+                print("Warning: Multiple 'bounds' objects found - check capitalization")
+            bounds_ob = bobj
+            continue
+
+        if "name" in bobj:
+            name = bobj["name"]
+        else:
+            name = undup_name(bobj.name)
 
         if bobj.users_group:
             if len(bobj.users_group) > 1:
                 print("Warning: Mesh {} is in multiple groups".format(bobj.name))
 
             lod_name = bobj.users_group[0].name
-        elif common_col_name.match(bobj.name):
+        elif common_col_name.match(name):
             lod_name = "collision-1"
         else:
             lod_name = "detail32"
@@ -253,8 +266,6 @@ def save(operator, context, filepath,
             print("Creating LOD '{}' (size {})".format(lod_name, lod_size))
             scene_lods[lod_name] = DetailLevel(name=lod_name_index, subshape=0, objectDetail=-1, size=lod_size)
             shape.detail_levels.append(scene_lods[lod_name])
-
-        name = bobj.name
 
         if name not in scene_objects:
             object = Object(shape.name(name), numMeshes=0, firstMesh=0, node=attach_node)

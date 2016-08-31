@@ -8,7 +8,7 @@ from .write_report import write_debug_report
 from .util import default_materials, resolve_texture, get_rgb_colors
 
 import operator
-from itertools import zip_longest
+from itertools import zip_longest, count
 from functools import reduce
 from random import random
 
@@ -20,8 +20,18 @@ def grouper(iterable, n, fillvalue=None):
     args = [iter(iterable)] * n
     return zip_longest(*args, fillvalue=fillvalue)
 
+def dedup_name(group, name):
+    if name not in group:
+        return name
+
+    for suffix in count(2):
+        new_name = name + "#" + str(suffix)
+
+        if new_name not in group:
+            return new_name
+
 def import_material(color_source, dmat, filepath):
-    bmat = bpy.data.materials.new(dmat.name)
+    bmat = bpy.data.materials.new(dedup_name(bpy.data.materials, dmat.name))
     bmat.diffuse_intensity = 1
 
     texname = resolve_texture(filepath, dmat.name)
@@ -446,7 +456,7 @@ def load(operator, context, filepath,
     node_obs_val = {}
 
     for i, node in enumerate(shape.nodes):
-        ob = bpy.data.objects.new(shape.names[node.name], None)
+        ob = bpy.data.objects.new(dedup_name(bpy.data.objects, shape.names[node.name]), None)
         ob.empty_draw_type = "SINGLE_ARROW"
         ob.empty_draw_size = 0.5
 
@@ -575,7 +585,7 @@ def load(operator, context, filepath,
                 # continue
 
             bmesh = create_bmesh(mesh, materials, shape)
-            bobj = bpy.data.objects.new(name=shape.names[obj.name], object_data=bmesh)
+            bobj = bpy.data.objects.new(dedup_name(bpy.data.objects, shape.names[obj.name]), bmesh)
             context.scene.objects.link(bobj)
 
             if obj.node != -1:
