@@ -189,7 +189,7 @@ def save(operator, context, filepath,
         seq.toolBegin = frame_start
         seq.duration = frame_range * (context.scene.render.fps_base / context.scene.render.fps)
 
-        seq.numKeyframes = int(math.ceil(float(frame_range) / frame_step))
+        seq.numKeyframes = frame_range
         seq.firstGroundFrame = len(dsq.ground_translations)
         seq.baseRotation = len(dsq.rotations)
         seq.baseTranslation = len(dsq.translations)
