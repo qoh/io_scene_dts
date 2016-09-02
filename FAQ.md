@@ -32,10 +32,6 @@ Add a custom property named "blendMode" and set it to "subtractive" in the mater
 
 ![](http://i.imgur.com/FXufzLb.png)
 
-#### How do I add environment maps or mip maps?
-
-You can't do this with the plugin yet. I'm not sure if they actually work in Torque.
-
 #### How do I create IFL materials?
 
 Set the following custom properties on the material:
