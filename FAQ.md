@@ -14,7 +14,7 @@ Torque uses texture files for materials that are looked up by the name of your m
 
 #### My model is bigger/smaller, rotated wrong or in the wrong place when I export it.
 
-Select your mesh and press `Ctrl-A` to apply location, rotation or scale. This will apply the mesh transforms to the actual geometry and clear them, which you need to do because DTS does not support them. The "Use mesh transforms" export setting is supposed to do this for you automatically but I don't think it works right at the moment.
+Select your mesh and press `Ctrl-A` to apply location, rotation or scale. This will apply the mesh transforms to the actual geometry and clear them, which you need to do because DTS does not support them.
 
 #### How do I make a material transparent?
 
