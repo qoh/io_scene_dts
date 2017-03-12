@@ -1,5 +1,5 @@
 import os
-
+import bpy
 from colorsys import hsv_to_rgb
 from itertools import count
 from fractions import Fraction
@@ -67,3 +67,55 @@ def get_hsv_colors():
 
 def get_rgb_colors():
     return map(lambda hsv: hsv_to_rgb(*hsv), get_hsv_colors())
+
+def action_get_or_new(ob):
+  if not ob.animation_data:
+    ob.animation_data_create()
+
+  if ob.animation_data.action:
+    return ob.animation_data.action
+
+  action = bpy.data.actions.new(ob.name + "Action")
+  ob.animation_data.action = action
+
+  return action
+
+def ob_curves_array(ob, data_path, array_count):
+  action = action_get_or_new(ob)
+  curves = [None] * array_count
+
+  for curve in action.fcurves:
+    if curve.data_path != data_path or curve.array_index < 0 or curve.array_index >= array_count:
+      continue
+
+    if curves[curve.array_index]:
+      pass # TODO: warn if more than one curve for an array slot
+
+    curves[curve.array_index] = curve
+
+  for index, curve in enumerate(curves):
+    if curve is None:
+      curves[index] = action.fcurves.new(data_path, index)
+
+  return curves
+
+def ob_location_curves(ob):
+  return ob_curves_array(ob, "location", 3)
+
+def ob_scale_curves(ob):
+  return ob_curves_array(ob, "scale", 3)
+
+def ob_rotation_curves(ob):
+  if ob.rotation_mode == "QUATERNION":
+    data_path = "rotation_quaternion"
+    array_count = 4
+  elif ob.rotation_mode == "XYZ":
+    data_path = "rotation_euler"
+    array_count = 3
+  else:
+    assert false, "unhandled rotation mode '{}' on '{}'".format(ob.rotation_mode, ob.name)
+
+  return ob.rotation_mode, ob_curves_array(ob, data_path, array_count)
+
+def evaluate_all(curves, frame):
+    return tuple(map(lambda c: c.evaluate(frame), curves))

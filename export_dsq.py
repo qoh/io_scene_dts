@@ -5,14 +5,12 @@ from itertools import groupby
 
 from .DsqFile import DsqFile
 from .DtsTypes import *
+from .util import evaluate_all
 
 def fail(operator, message):
     print("Error:", message)
     operator.report({"ERROR"}, message)
     return {"FINISHED"}
-
-def evaluate_all(curves, frame):
-    return tuple(map(lambda c: c.evaluate(frame), curves))
 
 def array_from_fcurves(curves, data_path, array_size):
     found = False
@@ -62,6 +60,11 @@ def save(operator, context, filepath,
     for ob in scene.objects:
         if ob.type == "EMPTY" and not ob.parent:
             traverse_node(ob)
+    
+    reference_frame = None
+    reference_marker = context.scene.timeline_markers.get("reference")
+    if reference_marker is not None:
+        reference_frame = reference_marker.frame
 
     # Figure out if we should create our own root node
     if "NodeOrder" in bpy.data.texts:
@@ -252,11 +255,18 @@ def save(operator, context, filepath,
                     r = Euler(evaluate_all(curves, frame), "XYZ").to_quaternion()
                 else:
                     assert false, "unknown rotation_mode after finding matters"
+                if seq.flags & Sequence.Blend and reference_frame is not None:
+                    ref_r = Quaternion(evaluate_all(curves, reference_frame))
+                    r = ref_r.inverted() * r
                 dsq.rotations.append(r)
 
         for curves in seq_curves_translation:
             for frame in frame_indices:
-                dsq.translations.append(Vector(evaluate_all(curves, frame)))
+                v = Vector(evaluate_all(curves, frame))
+                if seq.flags & Sequence.Blend and reference_frame is not None:
+                    ref_v = Vector(evaluate_all(curves, reference_frame))
+                    v -= ref_v
+                dsq.translations.append(v)
 
         for curves in seq_curves_scale:
             for frame in frame_indices:

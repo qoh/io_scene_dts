@@ -55,6 +55,12 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
             description="Creates the NodeOrder text block for compatibility with existing DSQ files for this skeleton",
             default=False,
             )
+    
+    reference_keyframe = BoolProperty(
+            name="Reference keyframe",
+            description="Set a keyframe with the reference pose for blend animations",
+            default=False,
+            )
 
     import_sequences = BoolProperty(
             name="Import sequences",

@@ -2,7 +2,8 @@ import bpy
 from math import ceil
 
 from .DsqFile import DsqFile
-from .DtsTypes import Sequence
+from .DtsTypes import Sequence, Quaternion, Vector
+from .util import ob_location_curves, ob_scale_curves, ob_rotation_curves, evaluate_all
 
 def fail(operator, message):
   print("Error: " + message)
@@ -22,55 +23,6 @@ def get_free_name(name, taken):
       return name_try
 
     suffix += 1
-
-def action_get_or_new(ob):
-  if not ob.animation_data:
-    ob.animation_data_create()
-
-  if ob.animation_data.action:
-    return ob.animation_data.action
-
-  action = bpy.data.actions.new(ob.name + "Action")
-  ob.animation_data.action = action
-
-  return action
-
-def ob_curves_array(ob, data_path, array_count):
-  action = action_get_or_new(ob)
-  curves = [None] * array_count
-
-  for curve in action.fcurves:
-    if curve.data_path != data_path or curve.array_index < 0 or curve.array_index >= array_count:
-      continue
-
-    if curves[curve.array_index]:
-      pass # TODO: warn if more than one curve for an array slot
-
-    curves[curve.array_index] = curve
-
-  for index, curve in enumerate(curves):
-    if curve is None:
-      curves[index] = action.fcurves.new(data_path, index)
-
-  return curves
-
-def ob_location_curves(ob):
-  return ob_curves_array(ob, "location", 3)
-
-def ob_scale_curves(ob):
-  return ob_curves_array(ob, "scale", 3)
-
-def ob_rotation_curves(ob):
-  if ob.rotation_mode == "QUATERNION":
-    data_path = "rotation_quaternion"
-    array_count = 4
-  elif ob.rotation_mode == "XYZ":
-    data_path = "rotation_euler"
-    array_count = 3
-  else:
-    assert false, "unhandled rotation mode '{}' on '{}'".format(ob.rotation_mode, ob.name)
-
-  return ob.rotation_mode, ob_curves_array(ob, data_path, array_count)
 
 # action.fcurves.new(data_path, array_index)
 # action.fcurves[].keyframe_points.add(number)
@@ -143,6 +95,11 @@ def load(operator, context, filepath):
 
   sequences_text = []
 
+  reference_frame = None
+  reference_marker = context.scene.timeline_markers.get("reference")
+  if reference_marker is not None:
+    reference_frame = reference_marker.frame
+
   # Create Blender keyframes and markers for each sequence
   for seq in dsq.sequences:
     name = get_free_name(seq.name, scene_sequences)
@@ -171,6 +128,9 @@ def load(operator, context, filepath):
 
       for frameIndex in range(seq.numKeyframes):
         vec = dsq.translations[seq.baseTranslation + mattersIndex * seq.numKeyframes + frameIndex]
+        if (seq.flags & Sequence.Blend) and reference_frame is not None:
+          ref_vec = Vector(evaluate_all(curves, reference_frame))
+          vec = ref_vec + vec
 
         for curve in curves:
           curve.keyframe_points.add(1)
@@ -183,6 +143,9 @@ def load(operator, context, filepath):
 
       for frameIndex in range(seq.numKeyframes):
         rot = dsq.rotations[seq.baseRotation + mattersIndex * seq.numKeyframes + frameIndex]
+        if (seq.flags & Sequence.Blend) and reference_frame is not None:
+          ref_rot = Quaternion(evaluate_all(curves, reference_frame))
+          rot = ref_rot * rot
         if mode != "QUATERNION":
           rot = rot.to_euler(mode)
 

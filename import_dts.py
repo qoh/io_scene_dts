@@ -5,7 +5,7 @@ from bpy_extras.io_utils import unpack_list
 from .DtsShape import DtsShape
 from .DtsTypes import *
 from .write_report import write_debug_report
-from .util import default_materials, resolve_texture, get_rgb_colors
+from .util import default_materials, resolve_texture, get_rgb_colors, ob_location_curves, ob_scale_curves, ob_rotation_curves
 
 import operator
 from itertools import zip_longest, count
@@ -170,55 +170,6 @@ def create_bmesh(dmesh, materials, shape):
     me.update()
 
     return me
-
-def action_get_or_new(ob):
-  if not ob.animation_data:
-    ob.animation_data_create()
-
-  if ob.animation_data.action:
-    return ob.animation_data.action
-
-  action = bpy.data.actions.new(ob.name + "Action")
-  ob.animation_data.action = action
-
-  return action
-
-def ob_curves_array(ob, data_path, array_count):
-  action = action_get_or_new(ob)
-  curves = [None] * array_count
-
-  for curve in action.fcurves:
-    if curve.data_path != data_path or curve.array_index < 0 or curve.array_index >= array_count:
-      continue
-
-    if curves[curve.array_index]:
-      pass # TODO: warn if more than one curve for an array slot
-
-    curves[curve.array_index] = curve
-
-  for index, curve in enumerate(curves):
-    if curve is None:
-      curves[index] = action.fcurves.new(data_path, index)
-
-  return curves
-
-def ob_location_curves(ob):
-  return ob_curves_array(ob, "location", 3)
-
-def ob_scale_curves(ob):
-  return ob_curves_array(ob, "scale", 3)
-
-def ob_rotation_curves(ob):
-  if ob.rotation_mode == "QUATERNION":
-    data_path = "rotation_quaternion"
-    array_count = 4
-  elif ob.rotation_mode == "XYZ":
-    data_path = "rotation_euler"
-    array_count = 3
-  else:
-    assert false, "unhandled rotation mode '{}' on '{}'".format(ob.rotation_mode, ob.name)
-
-  return ob.rotation_mode, ob_curves_array(ob, data_path, array_count)
 
 def get_node_head(i, node, shape):
     return node.mat.to_translation()
@@ -406,6 +357,7 @@ def load_new(operator, context, filepath,
 def load(operator, context, filepath,
          hide_default_player=False,
          import_node_order=False,
+         reference_keyframe=False,
          import_sequences=True,
          debug_report=False,
          hacky_new_bone_import=False,
@@ -455,6 +407,9 @@ def load(operator, context, filepath,
     node_obs = []
     node_obs_val = {}
 
+    if reference_keyframe:
+        reference_frame = 1
+
     for i, node in enumerate(shape.nodes):
         ob = bpy.data.objects.new(dedup_name(bpy.data.objects, shape.names[node.name]), None)
         ob.empty_draw_type = "SINGLE_ARROW"
@@ -470,6 +425,31 @@ def load(operator, context, filepath,
         context.scene.objects.link(ob)
         node_obs.append(ob)
         node_obs_val[node] = ob
+
+        if reference_keyframe:
+            curves = ob_location_curves(ob)
+            for curve in curves:
+                curve.keyframe_points.add(1)
+                key = curve.keyframe_points[-1]
+                key.interpolation = "LINEAR"
+                key.co = (reference_frame, ob.location[curve.array_index])
+            
+            curves = ob_scale_curves(ob)
+            for curve in curves:
+                curve.keyframe_points.add(1)
+                key = curve.keyframe_points[-1]
+                key.interpolation = "LINEAR"
+                key.co = (reference_frame, ob.scale[curve.array_index])
+            
+            _, curves = ob_rotation_curves(ob)
+            for curve in curves:
+                curve.keyframe_points.add(1)
+                key = curve.keyframe_points[-1]
+                key.interpolation = "LINEAR"
+                key.co = (reference_frame, ob.rotation_quaternion[curve.array_index])
+    
+    if reference_keyframe:
+        context.scene.timeline_markers.new("reference", reference_frame)
 
     # Try animation?
     if import_sequences:
