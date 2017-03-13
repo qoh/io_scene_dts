@@ -124,7 +124,7 @@ def load(operator, context, filepath,
 
       for frameIndex in range(seq.numKeyframes):
         vec = dsq.translations[seq.baseTranslation + mattersIndex * seq.numKeyframes + frameIndex]
-        if (seq.flags & Sequence.Blend):
+        if seq.flags & Sequence.Blend:
           if reference_frame is None:
             return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
           ref_vec = Vector(evaluate_all(curves, reference_frame))
@@ -141,7 +141,7 @@ def load(operator, context, filepath,
 
       for frameIndex in range(seq.numKeyframes):
         rot = dsq.rotations[seq.baseRotation + mattersIndex * seq.numKeyframes + frameIndex]
-        if (seq.flags & Sequence.Blend):
+        if seq.flags & Sequence.Blend:
           if reference_frame is None:
             return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
           ref_rot = Quaternion(evaluate_all(curves, reference_frame))

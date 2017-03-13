@@ -488,6 +488,11 @@ def load(operator, context, filepath,
 
                 for frameIndex in range(seq.numKeyframes):
                     vec = shape.node_translations[seq.baseTranslation + mattersIndex * seq.numKeyframes + frameIndex]
+                    if seq.flags & Sequence.Blend:
+                        if reference_frame is None:
+                            return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
+                        ref_vec = Vector(evaluate_all(curves, reference_frame))
+                        vec = ref_vec + vec
 
                     for curve in curves:
                         curve.keyframe_points.add(1)
@@ -503,6 +508,11 @@ def load(operator, context, filepath,
 
                 for frameIndex in range(seq.numKeyframes):
                     rot = shape.node_rotations[seq.baseRotation + mattersIndex * seq.numKeyframes + frameIndex]
+                    if seq.flags & Sequence.Blend:
+                        if reference_frame is None:
+                            return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
+                        ref_rot = Quaternion(evaluate_all(curves, reference_frame))
+                        rot = ref_rot * rot
                     if mode != "QUATERNION":
                         rot = rot.to_euler(mode)
 
