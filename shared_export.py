@@ -1,5 +1,10 @@
 import bpy
 
+def find_reference(scene):
+    reference_marker = context.scene.timeline_markers.get("reference")
+    if reference_marker is not None:
+        return reference_marker.frame
+
 def find_seqs(scene):
     sequences = {}
     sequence_flags = {}

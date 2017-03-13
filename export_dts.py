@@ -8,7 +8,7 @@ from .DtsTypes import *
 from .write_report import write_debug_report
 from .util import fail, resolve_texture, default_materials, evaluate_all, \
     array_from_fcurves, fcurves_keyframe_in_range, transform_co, transform_normal
-from .shared_export import find_seqs
+from .shared_export import find_seqs, find_reference
 
 import re
 # re really isn't necessary. oh well.
@@ -433,6 +433,7 @@ def save(operator, context, filepath,
         (shape.bounds.min.z + shape.bounds.max.z) / 2))
     
     sequences, sequence_flags = find_seqs(context.scene)
+    reference_frame = find_reference(context.scene)
 
     for name, markers in sequences.items():
         print("Exporting sequence", name)
@@ -532,11 +533,22 @@ def save(operator, context, filepath,
                     r = Euler(evaluate_all(curves, frame), "XYZ").to_quaternion()
                 else:
                     assert false, "unknown rotation_mode after finding matters"
+                if seq.flags & Sequence.Blend:
+                    if reference_frame is None:
+                        return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
+                    ref_r = Quaternion(evaluate_all(curves, reference_frame))
+                    r = ref_r.inverted() * r
                 shape.node_rotations.append(r)
 
         for curves in seq_curves_translation:
             for frame in frame_indices:
-                shape.node_translations.append(Vector(evaluate_all(curves, frame)))
+                v = Vector(evaluate_all(curves, frame))
+                if seq.flags & Sequence.Blend:
+                    if reference_frame is None:
+                        return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
+                    ref_v = Vector(evaluate_all(curves, reference_frame))
+                    v -= ref_v
+                shape.node_translations.append(v)
 
         for curves in seq_curves_scale:
             for frame in frame_indices:

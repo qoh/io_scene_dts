@@ -7,7 +7,7 @@ from .DsqFile import DsqFile
 from .DtsTypes import *
 from .util import fail, evaluate_all, array_from_fcurves, \
     fcurves_keyframe_in_range, transform_co, transform_normal
-from .shared_export import find_seqs
+from .shared_export import find_seqs, find_reference
 
 def save(operator, context, filepath,
          debug_report=False):
@@ -34,10 +34,7 @@ def save(operator, context, filepath,
         if ob.type == "EMPTY" and not ob.parent:
             traverse_node(ob)
     
-    reference_frame = None
-    reference_marker = context.scene.timeline_markers.get("reference")
-    if reference_marker is not None:
-        reference_frame = reference_marker.frame
+    reference_frame = find_reference(context.scene)
 
     # Figure out if we should create our own root node
     if "NodeOrder" in bpy.data.texts:
