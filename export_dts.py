@@ -8,6 +8,7 @@ from .DtsTypes import *
 from .write_report import write_debug_report
 from .util import fail, resolve_texture, default_materials, evaluate_all, \
     array_from_fcurves, fcurves_keyframe_in_range, transform_co, transform_normal
+from .shared_export import find_seqs
 
 import re
 # re really isn't necessary. oh well.
@@ -430,52 +431,8 @@ def save(operator, context, filepath,
         (shape.bounds.min.x + shape.bounds.max.x) / 2,
         (shape.bounds.min.y + shape.bounds.max.y) / 2,
         (shape.bounds.min.z + shape.bounds.max.z) / 2))
-
-    sequences = {}
-
-    for marker in context.scene.timeline_markers:
-        if ":" not in marker.name:
-            continue
-
-        name, what = marker.name.rsplit(":", 1)
-
-        if name not in sequences:
-            sequences[name] = {}
-
-        if what in sequences[name]:
-            print("Warning: Got duplicate '{}' marker for sequence '{}' at frame {} (first was at frame {}), ignoring".format(what, name, marker.frame, sequences[name][what].frame))
-            continue
-
-        sequences[name][what] = marker
-
-    sequence_flags_strict = False
-    sequence_flags = {}
-    sequence_missing = set()
-
-    if "Sequences" in bpy.data.texts:
-        for line in bpy.data.texts["Sequences"].as_string().split("\n"):
-            line = line.strip()
-
-            if not line:
-                continue
-
-            if line == "strict":
-                sequence_flags_strict = True
-                continue
-
-            if ":" not in line:
-                print("Invalid line in 'Sequences':", line)
-                continue
-
-            name, flags = line.split(":", 1)
-
-            if flags.lstrip():
-                flags = tuple(map(lambda f: f.strip(), flags.split(",")))
-            else:
-                flags = ()
-
-            sequence_flags[name] = flags
-            sequence_missing.add(name)
+    
+    sequences, sequence_flags = find_seqs(context.scene)
 
     for name, markers in sequences.items():
         print("Exporting sequence", name)
@@ -504,10 +461,6 @@ def save(operator, context, filepath,
                     seq.flags |= Sequence.Blend
                 else:
                     print("Warning: Unknown flag '{}' (used by sequence '{}')".format(flag, name))
-
-            sequence_missing.remove(name)
-        elif sequence_flags_strict:
-            return fail(operator, "Missing 'Sequences' line for sequence '{}'".format(name))
 
         frame_start = markers["start"].frame
         frame_end = markers["end"].frame
@@ -588,9 +541,6 @@ def save(operator, context, filepath,
         for curves in seq_curves_scale:
             for frame in frame_indices:
                 shape.node_aligned_scales.append(Vector(evaluate_all(curves, frame)))
-
-    for name in sequence_missing:
-        print("Warning: Sequence '{}' exists in flags file, but no markers were found".format(name))
 
     if debug_report:
         print("Writing debug report")

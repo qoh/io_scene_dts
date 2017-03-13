@@ -104,6 +104,12 @@ class ImportDSQ(bpy.types.Operator, ImportHelper):
             options={'HIDDEN'},
             )
 
+    debug_report = BoolProperty(
+        name="Write debug report",
+        description="Dump out all the information from the DSQ to a file",
+        default=False,
+        )
+
     def execute(self, context):
         from . import import_dsq
 
@@ -190,6 +196,12 @@ class ExportDSQ(bpy.types.Operator, ExportHelper):
     #         description="Export selected objects only",
     #         default=False,
     #         )
+
+    debug_report = BoolProperty(
+        name="Write debug report",
+        description="Dump out all the information from the DSQ to a file",
+        default=False,
+        )
 
     check_extension = True
 

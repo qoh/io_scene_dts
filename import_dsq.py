@@ -24,11 +24,16 @@ def get_free_name(name, taken):
 # action.fcurves[].keyframe_points[].interpolation = "LINEAR"
 # action.fcurves[].keyframe_points[].co
 
-def load(operator, context, filepath):
+def load(operator, context, filepath,
+         debug_report=False):
   dsq = DsqFile()
 
   with open(filepath, "rb") as fd:
     dsq.read(fd)
+  
+  if debug_report:
+      with open(filepath + ".txt", "w") as fd:
+        dsq.write_dump(fd)
 
   print("Resolving nodes...")
 
