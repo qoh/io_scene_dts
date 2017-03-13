@@ -3,7 +3,7 @@ from math import ceil
 
 from .DsqFile import DsqFile
 from .DtsTypes import Sequence, Quaternion, Vector
-from .util import fail, ob_location_curves, ob_scale_curves, ob_rotation_curves, evaluate_all
+from .util import fail, ob_location_curves, ob_scale_curves, ob_rotation_curves, evaluate_all, find_reference
 
 def get_free_name(name, taken):
   if name not in taken:
@@ -94,11 +94,7 @@ def load(operator, context, filepath,
       scene_sequences.add(name)
 
   sequences_text = []
-
-  reference_frame = None
-  reference_marker = context.scene.timeline_markers.get("reference")
-  if reference_marker is not None:
-    reference_frame = reference_marker.frame
+  reference_frame = find_reference(context.scene)
 
   # Create Blender keyframes and markers for each sequence
   for seq in dsq.sequences:
@@ -128,7 +124,9 @@ def load(operator, context, filepath,
 
       for frameIndex in range(seq.numKeyframes):
         vec = dsq.translations[seq.baseTranslation + mattersIndex * seq.numKeyframes + frameIndex]
-        if (seq.flags & Sequence.Blend) and reference_frame is not None:
+        if (seq.flags & Sequence.Blend):
+          if reference_frame is None:
+            return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
           ref_vec = Vector(evaluate_all(curves, reference_frame))
           vec = ref_vec + vec
 
@@ -143,7 +141,9 @@ def load(operator, context, filepath,
 
       for frameIndex in range(seq.numKeyframes):
         rot = dsq.rotations[seq.baseRotation + mattersIndex * seq.numKeyframes + frameIndex]
-        if (seq.flags & Sequence.Blend) and reference_frame is not None:
+        if (seq.flags & Sequence.Blend):
+          if reference_frame is None:
+            return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
           ref_rot = Quaternion(evaluate_all(curves, reference_frame))
           rot = ref_rot * rot
         if mode != "QUATERNION":

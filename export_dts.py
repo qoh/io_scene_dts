@@ -6,9 +6,9 @@ from itertools import groupby
 from .DtsShape import DtsShape
 from .DtsTypes import *
 from .write_report import write_debug_report
-from .util import fail, resolve_texture, default_materials, evaluate_all, \
+from .util import fail, resolve_texture, default_materials, evaluate_all, find_reference, \
     array_from_fcurves, fcurves_keyframe_in_range, transform_co, transform_normal
-from .shared_export import find_seqs, find_reference
+from .shared_export import find_seqs
 
 import re
 # re really isn't necessary. oh well.

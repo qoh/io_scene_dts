@@ -147,6 +147,11 @@ def transform_co(ob, co):
 def transform_normal(ob, normal):
     return (ob.matrix_world.to_3x3() * normal).normalized()
 
+def find_reference(scene):
+    reference_marker = context.scene.timeline_markers.get("reference")
+    if reference_marker is not None:
+        return reference_marker.frame
+
 def fail(operator, message):
     print("Error:", message)
     operator.report({"ERROR"}, message)
