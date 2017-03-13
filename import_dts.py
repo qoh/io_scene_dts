@@ -408,7 +408,12 @@ def load(operator, context, filepath,
     node_obs_val = {}
 
     if reference_keyframe:
-        reference_frame = 1
+        reference_marker = context.scene.timeline_markers.get("reference")
+        if reference_marker is None:
+            reference_frame = 1
+            context.scene.timeline_markers.new("reference", reference_frame)
+        else:
+            reference_frame = reference_marker.frame
 
     for i, node in enumerate(shape.nodes):
         ob = bpy.data.objects.new(dedup_name(bpy.data.objects, shape.names[node.name]), None)
@@ -448,9 +453,6 @@ def load(operator, context, filepath,
                 key.interpolation = "LINEAR"
                 key.co = (reference_frame, ob.rotation_quaternion[curve.array_index])
     
-    if reference_keyframe:
-        context.scene.timeline_markers.new("reference", reference_frame)
-
     # Try animation?
     if import_sequences:
         globalToolIndex = 10
