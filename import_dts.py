@@ -5,7 +5,8 @@ from bpy_extras.io_utils import unpack_list
 from .DtsShape import DtsShape
 from .DtsTypes import *
 from .write_report import write_debug_report
-from .util import default_materials, resolve_texture, get_rgb_colors, ob_location_curves, ob_scale_curves, ob_rotation_curves
+from .util import default_materials, resolve_texture, get_rgb_colors, \
+    ob_location_curves, ob_scale_curves, ob_rotation_curves, evaluate_all
 
 import operator
 from itertools import zip_longest, count
