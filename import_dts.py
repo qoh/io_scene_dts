@@ -414,6 +414,8 @@ def load(operator, context, filepath,
             context.scene.timeline_markers.new("reference", reference_frame)
         else:
             reference_frame = reference_marker.frame
+    else:
+        reference_frame = None
 
     for i, node in enumerate(shape.nodes):
         ob = bpy.data.objects.new(dedup_name(bpy.data.objects, shape.names[node.name]), None)
