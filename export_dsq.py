@@ -5,34 +5,8 @@ from itertools import groupby
 
 from .DsqFile import DsqFile
 from .DtsTypes import *
-from .util import fail, evaluate_all
-
-def array_from_fcurves(curves, data_path, array_size):
-    found = False
-    array = [None] * array_size
-
-    for curve in curves:
-        if curve.data_path == data_path and curve.array_index != -1:
-            array[curve.array_index] = curve
-            found = True
-
-    if found:
-        return tuple(array)
-
-def fcurves_keyframe_in_range(curves, start, end):
-    for curve in curves:
-        for keyframe in curve.keyframe_points:
-            frame = keyframe.co[0]
-            if frame >= start and frame <= end:
-                return True
-
-    return False
-
-def transform_co(ob, co):
-    return ob.matrix_world * co
-
-def transform_normal(ob, normal):
-    return (ob.matrix_world.to_3x3() * normal).normalized()
+from .util import fail, evaluate_all, array_from_fcurves, \
+    fcurves_keyframe_in_range, transform_co, transform_normal
 
 def save(operator, context, filepath,
          debug_report=True):

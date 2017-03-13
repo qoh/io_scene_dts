@@ -6,7 +6,8 @@ from itertools import groupby
 from .DtsShape import DtsShape
 from .DtsTypes import *
 from .write_report import write_debug_report
-from .util import fail, resolve_texture, default_materials
+from .util import fail, resolve_texture, default_materials, evaluate_all, \
+    array_from_fcurves, fcurves_keyframe_in_range, transform_co, transform_normal
 
 import re
 # re really isn't necessary. oh well.
@@ -111,36 +112,6 @@ def export_all_nodes(lookup, shape, obs, parent=-1):
             lookup[ob] = node
 
             export_all_nodes(lookup, shape, ob.children, node)
-
-def evaluate_all(curves, frame):
-    return tuple(map(lambda c: c.evaluate(frame), curves))
-
-def array_from_fcurves(curves, data_path, array_size):
-    found = False
-    array = [None] * array_size
-
-    for curve in curves:
-        if curve.data_path == data_path and curve.array_index != -1:
-            array[curve.array_index] = curve
-            found = True
-
-    if found:
-        return tuple(array)
-
-def fcurves_keyframe_in_range(curves, start, end):
-    for curve in curves:
-        for keyframe in curve.keyframe_points:
-            frame = keyframe.co[0]
-            if frame >= start and frame <= end:
-                return True
-
-    return False
-
-def transform_co(ob, co):
-    return ob.matrix_local * co
-
-def transform_normal(ob, normal):
-    return (ob.matrix_local.to_3x3() * normal).normalized()
 
 def save(operator, context, filepath,
          blank_material=True,
