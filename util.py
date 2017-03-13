@@ -119,3 +119,8 @@ def ob_rotation_curves(ob):
 
 def evaluate_all(curves, frame):
     return tuple(map(lambda c: c.evaluate(frame), curves))
+
+def fail(operator, message):
+    print("Error:", message)
+    operator.report({"ERROR"}, message)
+    return {"FINISHED"}

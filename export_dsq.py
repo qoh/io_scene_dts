@@ -5,12 +5,7 @@ from itertools import groupby
 
 from .DsqFile import DsqFile
 from .DtsTypes import *
-from .util import evaluate_all
-
-def fail(operator, message):
-    print("Error:", message)
-    operator.report({"ERROR"}, message)
-    return {"FINISHED"}
+from .util import fail, evaluate_all
 
 def array_from_fcurves(curves, data_path, array_size):
     found = False
@@ -255,7 +250,9 @@ def save(operator, context, filepath,
                     r = Euler(evaluate_all(curves, frame), "XYZ").to_quaternion()
                 else:
                     assert false, "unknown rotation_mode after finding matters"
-                if seq.flags & Sequence.Blend and reference_frame is not None:
+                if seq.flags & Sequence.Blend:
+                    if reference_frame is None:
+                        return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
                     ref_r = Quaternion(evaluate_all(curves, reference_frame))
                     r = ref_r.inverted() * r
                 dsq.rotations.append(r)
@@ -263,7 +260,9 @@ def save(operator, context, filepath,
         for curves in seq_curves_translation:
             for frame in frame_indices:
                 v = Vector(evaluate_all(curves, frame))
-                if seq.flags & Sequence.Blend and reference_frame is not None:
+                if seq.flags & Sequence.Blend:
+                    if reference_frame is None:
+                        return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
                     ref_v = Vector(evaluate_all(curves, reference_frame))
                     v -= ref_v
                 dsq.translations.append(v)

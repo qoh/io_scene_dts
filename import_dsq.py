@@ -3,12 +3,7 @@ from math import ceil
 
 from .DsqFile import DsqFile
 from .DtsTypes import Sequence, Quaternion, Vector
-from .util import ob_location_curves, ob_scale_curves, ob_rotation_curves, evaluate_all
-
-def fail(operator, message):
-  print("Error: " + message)
-  operator.report({"ERROR"}, message)
-  return {"FINISHED"}
+from .util import fail, ob_location_curves, ob_scale_curves, ob_rotation_curves, evaluate_all
 
 def get_free_name(name, taken):
   if name not in taken:

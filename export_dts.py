@@ -6,7 +6,7 @@ from itertools import groupby
 from .DtsShape import DtsShape
 from .DtsTypes import *
 from .write_report import write_debug_report
-from .util import resolve_texture, default_materials
+from .util import fail, resolve_texture, default_materials
 
 import re
 # re really isn't necessary. oh well.
@@ -14,11 +14,6 @@ re_lod_size = re.compile(r"(-?\d+)$")
 re_lod_dup_name = re.compile(r"\.LOD\d{3}$")
 common_col_name = re.compile(r"^(LOS)?[cC]ol-?\d+$")
 default_bone_name = re.compile(r"^Bone(\.\d+)?$")
-
-def fail(operator, message):
-    print("Error:", message)
-    operator.report({"ERROR"}, message)
-    return {"FINISHED"}
 
 def undup_name(n):
     return n.split("#", 1)[0]
