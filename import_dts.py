@@ -214,13 +214,8 @@ def get_node_tail(i, node, shape):
 def file_base_name(filepath):
     return os.path.basename(filepath).rsplit(".", 1)[0]
 
-def load_new(operator, context, filepath,
+def load_new(operator, context, filepath, shape,
              hacky_new_bone_connect=True):
-    shape = DtsShape()
-
-    with open(filepath, "rb") as fd:
-        shape.load(fd)
-
     root_arm = bpy.data.armatures.new(file_base_name(filepath))
     root_ob = bpy.data.objects.new(root_arm.name, root_arm)
 
@@ -363,8 +358,6 @@ def load(operator, context, filepath,
          debug_report=False,
          hacky_new_bone_import=False,
          hacky_new_bone_connect=True):
-    if hacky_new_bone_import:
-        return load_new(operator, context, filepath, hacky_new_bone_connect)
     shape = DtsShape()
 
     with open(filepath, "rb") as fd:
@@ -374,6 +367,9 @@ def load(operator, context, filepath,
         write_debug_report(filepath + ".txt", shape)
         with open(filepath + ".pass.dts", "wb") as fd:
             shape.save(fd)
+    
+    if hacky_new_bone_import:
+        return load_new(operator, context, filepath, shape, hacky_new_bone_connect)
 
     # Create a Blender material for each DTS material
     materials = {}
