@@ -74,18 +74,6 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
         default=False,
         )
 
-    hacky_new_bone_import = BoolProperty(
-        name="HackyNewBoneImport",
-        description="Useless",
-        default=False,
-        )
-
-    hacky_new_bone_connect = BoolProperty(
-        name="HackyNewBoneConnect",
-        description="Requires HackyNewBoneImport, required for Auto IK",
-        default=False,
-        )
-
     def execute(self, context):
         from . import import_dts
 
