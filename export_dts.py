@@ -127,6 +127,7 @@ def save(operator, context, filepath,
 
     blank_material_index = None
     auto_root_index = None
+    reference_frame = find_reference(context.scene)
 
     # Create a DTS node for every armature/empty in the scene
     node_lookup = {}
@@ -433,7 +434,6 @@ def save(operator, context, filepath,
         (shape.bounds.min.z + shape.bounds.max.z) / 2))
     
     sequences, sequence_flags = find_seqs(context.scene)
-    reference_frame = find_reference(context.scene)
 
     for name, markers in sequences.items():
         print("Exporting sequence", name)
