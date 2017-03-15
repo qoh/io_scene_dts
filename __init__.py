@@ -258,8 +258,6 @@ class SplitMeshIndex(bpy.types.Operator):
 
         return {"FINISHED"}
 
-blockhead_nodes = ("HeadSkin", "chest", "Larm", "Lhand", "Rarm", "Rhand", "pants", "LShoe", "RShoe")
-
 class HideBlockheadNodes(bpy.types.Operator):
     """Set all non-default Blockhead model apparel meshes as hidden"""
 
@@ -267,9 +265,47 @@ class HideBlockheadNodes(bpy.types.Operator):
     bl_label = "Hide Blockhead nodes on selection"
     bl_options = {"REGISTER", "UNDO"}
 
+    blacklist = (
+        "copHat",
+        "knitHat",
+        "pack",
+        "quiver",
+        "femChest",
+        "epauletsRankB",
+        "epauletsRankC",
+        "epauletsRankD",
+        "epauletsRankA",
+        "skirtHip",
+        "skirtTrimRight",
+        "RHook",
+        "RarmSlim",
+        "LHook",
+        "LarmSlim",
+        "PointyHelmet",
+        "Helmet",
+        "bicorn",
+        "scoutHat",
+        "FlareHelmet",
+        "triPlume",
+        "plume",
+        "septPlume",
+        "tank",
+        "armor",
+        "cape",
+        "Bucket",
+        "epaulets",
+        "ShoulderPads",
+        "Rski",
+        "Rpeg",
+        "Lski",
+        "Lpeg",
+        "skirtTrimLeft",
+        "Visor",
+    )
+
     def execute(self, context):
         for ob in context.scene.objects:
-            if ob.select and ob.type == "MESH" and ob.name not in blockhead_nodes:
+            if ob.select and ob.type == "MESH" and ob.name in self.blacklist:
                 ob.hide = True
 
         return {"FINISHED"}
