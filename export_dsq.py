@@ -37,8 +37,16 @@ def save(operator, context, filepath,
     
     reference_frame = find_reference(context.scene)
 
+    # NodeOrder backwards compatibility
+    if "NodeOrder" in bpy.data.texts:
+        order = bpy.data.texts["NodeOrder"].as_string().split("\n")
+        order_key = {name: i for i, name in enumerate(order)}
+    else:
+        order_key = {}
+
     # Sort by node indices from the DTS
-    dsq.nodes = list(sorted(dsq.nodes, key=lambda n: node_ob[n].get("nodeIndex", sys.maxsize)))
+    dsq.nodes = list(sorted(dsq.nodes, key=lambda n:
+        node_ob[n].get("nodeIndex", order_key.get(n, sys.maxsize))))
 
     node_index = {node_ob[name]: i for i, name in enumerate(dsq.nodes)}
     auto_root_index = None

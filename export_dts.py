@@ -137,8 +137,16 @@ def save(operator, context, filepath,
     node_lookup = {}
     export_all_nodes(node_lookup, shape, select_object, filter(lambda o: not o.parent, scene.objects))
 
+    # NodeOrder backwards compatibility
+    if "NodeOrder" in bpy.data.texts:
+        order = bpy.data.texts["NodeOrder"].as_string().split("\n")
+        order_key = {name: i for i, name in enumerate(order)}
+    else:
+        order_key = {}
+
     # Sort by node indices from the DTS
-    shape.nodes = list(sorted(shape.nodes, key=lambda n: n.bl_ob.get("nodeIndex", sys.maxsize)))
+    shape.nodes = list(sorted(shape.nodes, key=lambda n:
+        n.bl_ob.get("nodeIndex", order_key.get(shape.names[n.name], sys.maxsize))))
 
     node_indices = {}
 
