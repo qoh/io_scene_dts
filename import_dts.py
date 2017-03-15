@@ -337,12 +337,12 @@ def load(operator, context, filepath,
                     index = seq.baseScale + mattersIndex * seq.numKeyframes + frameIndex
                     vec = shape.node_translations[seq.baseTranslation + mattersIndex * seq.numKeyframes + frameIndex]
 
-                    if seq.UniformScale:
+                    if seq.flags & Sequence.UniformScale:
                         s = shape.node_uniform_scales[index]
                         vec = (s, s, s)
-                    elif seq.AlignedScale:
+                    elif seq.flags & Sequence.AlignedScale:
                         vec = shape.node_aligned_scales[index]
-                    elif seq.ArbitraryScale:
+                    elif seq.flags & Sequence.ArbitraryScale:
                         print("Warning: Arbitrary scale animation not implemented")
                         break
                     else:
