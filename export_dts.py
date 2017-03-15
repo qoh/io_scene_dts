@@ -208,7 +208,7 @@ def save(operator, context, filepath,
             if auto_root_index is None:
                 auto_root_index = len(shape.nodes)
                 shape.nodes.append(Node(shape.name("__auto_root__")))
-                shape.default_rotations.append(Quaternion())
+                shape.default_rotations.append(Quaternion((1, 0, 0, 0)))
                 shape.default_translations.append(Vector())
 
             attach_node = auto_root_index
