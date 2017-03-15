@@ -44,12 +44,6 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
             options={'HIDDEN'},
             )
 
-    hide_default_player = BoolProperty(
-        name="Hide Blockhead Nodes",
-        description="Set extra avatar nodes to hidden",
-        default=False,
-        )
-
     reference_keyframe = BoolProperty(
             name="Reference keyframe",
             description="Set a keyframe with the reference pose for blend animations",
@@ -261,6 +255,22 @@ class SplitMeshIndex(bpy.types.Operator):
 
         out_me.validate()
         out_me.update()
+
+        return {"FINISHED"}
+
+blockhead_nodes = ("HeadSkin", "chest", "Larm", "Lhand", "Rarm", "Rhand", "pants", "LShoe", "RShoe")
+
+class HideBlockheadNodes(bpy.types.Operator):
+    """Set all non-default Blockhead model apparel meshes as hidden"""
+
+    bl_idname = "mesh.hide_blockhead_nodes"
+    bl_label = "Hide Blockhead nodes on selection"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        for ob in context.scene.objects:
+            if ob.select and ob.type == "MESH" and ob.name not in blockhead_nodes:
+                ob.hide = True
 
         return {"FINISHED"}
 

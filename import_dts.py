@@ -13,8 +13,6 @@ from itertools import zip_longest, count
 from functools import reduce
 from random import random
 
-blockhead_nodes = ("HeadSkin", "chest", "Larm", "Lhand", "Rarm", "Rhand", "pants", "LShoe", "RShoe")
-
 def grouper(iterable, n, fillvalue=None):
     "Collect data into fixed-length chunks or blocks"
     # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx"
@@ -173,7 +171,6 @@ def create_bmesh(dmesh, materials, shape):
     return me
 
 def load(operator, context, filepath,
-         hide_default_player=False,
          reference_keyframe=True,
          import_sequences=True,
          debug_report=False):
@@ -390,9 +387,6 @@ def load(operator, context, filepath,
 
             if obj.node != -1:
                 bobj.parent = node_obs[obj.node]
-
-            if hide_default_player and shape.names[obj.name] not in blockhead_nodes:
-                bobj.hide = True
 
             lod_name = shape.names[lod_by_mesh[meshIndex].name]
 
