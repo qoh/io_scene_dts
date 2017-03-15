@@ -59,7 +59,7 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
     reference_keyframe = BoolProperty(
             name="Reference keyframe",
             description="Set a keyframe with the reference pose for blend animations",
-            default=False,
+            default=True,
             )
 
     import_sequences = BoolProperty(

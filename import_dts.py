@@ -175,7 +175,7 @@ def create_bmesh(dmesh, materials, shape):
 def load(operator, context, filepath,
          hide_default_player=False,
          import_node_order=False,
-         reference_keyframe=False,
+         reference_keyframe=True,
          import_sequences=True,
          debug_report=False):
     shape = DtsShape()
