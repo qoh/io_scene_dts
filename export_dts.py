@@ -1,4 +1,4 @@
-import bpy, bmesh, os
+import bpy, bmesh, os, sys
 from math import sqrt, pi
 from operator import attrgetter
 from itertools import groupby
@@ -133,21 +133,8 @@ def save(operator, context, filepath,
     node_lookup = {}
     export_all_nodes(node_lookup, shape, filter(lambda o: not o.parent, scene.objects))
 
-    # Figure out if we should create our own root node
-    if "NodeOrder" in bpy.data.texts:
-        order = bpy.data.texts["NodeOrder"].as_string().split("\n")
-        order_key = {name: i for i, name in enumerate(order)}
-
-        try:
-            shape.nodes = list(sorted(shape.nodes, key=lambda n: order_key[shape.names[n.name]]))
-        except KeyError as e:
-            return fail(operator, "Node '{}' is missing from the 'NodeOrder' text block. This means that you may have added nodes to a skeleton when you shouldn't have, or that you forgot to remove the 'NodeOrder' text block. It is automatically created by the \"Import node order\" option when importing a DTS file. Perhaps you forgot to press Ctrl+N after you imported?".format(e.args[0]))
-
-        shape_node_names = set(map(lambda n: shape.names[n.name], shape.nodes))
-        missing_nodes = tuple(filter(lambda n: n not in shape_node_names, order))
-
-        if missing_nodes:
-            return fail(operator, "The following nodes were found in the 'NodeOrder' text block but do not exist in the shape. This means that you may have removed nodes from a skeleton when you shouldn't have, or that you forgot to remove the 'NodeOrder' text block:\n{}".format(", ".join(missing_nodes)))
+    # Sort by node indices from the DTS
+    shape.nodes = list(sorted(shape.nodes, key=lambda n: n.bl_ob.get("nodeIndex", sys.maxsize)))
 
     node_indices = {}
 
@@ -209,10 +196,6 @@ def save(operator, context, filepath,
             print("Warning: Mesh '{}' has no parent".format(bobj.name))
 
             if auto_root_index is None:
-                # This check has been disabled for now. What could go wrong?!
-                # if "NodeOrder" in bpy.data.texts and "__auto_root__" not in order_key:
-                #     return fail(operator, "The mesh '{}' does not have a parent. Normally, the exporter would create a temporary parent for you to fix this, but you have a specified NodeOrder (may be created by previously importing a DTS file and not pressing Ctrl+N after you're done with it), which does not have the '__auto_root__' entry (name used for the automatic parent).".format(bobj.name))
-
                 auto_root_index = len(shape.nodes)
                 shape.nodes.append(Node(shape.name("__auto_root__")))
                 shape.default_rotations.append(Quaternion())

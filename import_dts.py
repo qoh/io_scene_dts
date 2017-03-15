@@ -174,7 +174,6 @@ def create_bmesh(dmesh, materials, shape):
 
 def load(operator, context, filepath,
          hide_default_player=False,
-         import_node_order=False,
          reference_keyframe=True,
          import_sequences=True,
          debug_report=False):
@@ -210,14 +209,6 @@ def load(operator, context, filepath,
     for lod in shape.detail_levels:
         lod_by_mesh[lod.objectDetail] = lod
 
-    if import_node_order:
-        if "NodeOrder" in bpy.data.texts:
-            order_buf = bpy.data.texts["NodeOrder"]
-        else:
-            order_buf = bpy.data.texts.new("NodeOrder")
-
-        order_buf.from_string("\n".join(shape.names[node.name] for node in shape.nodes))
-
     node_obs = []
     node_obs_val = {}
 
@@ -233,6 +224,7 @@ def load(operator, context, filepath,
 
     for i, node in enumerate(shape.nodes):
         ob = bpy.data.objects.new(dedup_name(bpy.data.objects, shape.names[node.name]), None)
+        ob["nodeIndex"] = i
         ob.empty_draw_type = "SINGLE_ARROW"
         ob.empty_draw_size = 0.5
 

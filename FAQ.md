@@ -63,16 +63,6 @@ Right now you are limited to 21845 triangles. Explanation: You are limited to 65
 
 There is effectively no limit, but stay below 256 as anything higher sends invalid node update packets and will have random bad effects on clients.
 
-#### The wrong nodes are being animated when using DSQ files.
-
-This could be caused by several things, but try creating a text block named "NodeOrder" which lists the names of all nodes in your 'rig' and... re-exporting everything. Sorry.
-
-#### What is NodeOrder? Why do I get an error regarding it when exporting my mesh?
-
-If you check "import node order" when importing a mesh it will create a text block (in the Text Editor view) named "NodeOrder", containing a list of every node (empty) in the DTS file, one on each line. This is used for keeping a consistent export ordering for matching up with DSQ files.
-
-When this text block exists, you cannot add or remove nodes (empties) at all unless you also update the text block. The most common mistake is importing node order once and deleting everything to make a new model (instead of pressing `Ctrl-N`). Then when you try to export your model it will complain about the missing nodes from the previously imported model. To resolve this, just delete the text block.
-
 #### How do I put a mesh in a detail level/LOD? How do detail levels work in this plugin?
 
 The exporter will use the object group name as the detail level name if present. If your mesh is named "Col-X" it will put it in "Collision-X". Otherwise it uses "detail32" by default.
