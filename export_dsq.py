@@ -10,14 +10,15 @@ from .util import fail, evaluate_all, find_reference, array_from_fcurves, \
 from .shared_export import find_seqs
 
 def save(operator, context, filepath,
+         select_marker=False,
          debug_report=False):
-    print("Exporting scene to DTS")
+    print("Exporting scene to DSQ")
 
     scene = context.scene
     dsq = DsqFile()
 
     # Find all the sequences to export
-    sequences, sequence_flags = find_seqs(context.scene)
+    sequences, sequence_flags = find_seqs(context.scene, select_marker)
 
     # Create a DTS node for every armature/empty in the scene
     node_ob = {}

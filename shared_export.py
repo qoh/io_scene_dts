@@ -1,11 +1,11 @@
 import bpy
 
-def find_seqs(scene):
+def find_seqs(scene, select_marker):
     sequences = {}
     sequence_flags = {}
 
     for marker in scene.timeline_markers:
-        if ":" not in marker.name:
+        if ":" not in marker.name or (select_marker and not marker.select):
             continue
 
         name, what = marker.name.rsplit(":", 1)

@@ -105,11 +105,16 @@ class ExportDTS(bpy.types.Operator, ExportHelper):
             options={'HIDDEN'},
             )
 
-    # use_selection = BoolProperty(
-    #         name="Selection Only",
-    #         description="Export selected objects only",
-    #         default=False,
-    #         )
+    select_object = BoolProperty(
+            name="Selected objects only",
+            description="Export selected objects (empties, meshes) only",
+            default=False,
+            )
+    select_marker = BoolProperty(
+            name="Selected markers only",
+            description="Export selected timeline markers only, used for sequences",
+            default=False,
+            )
 
     blank_material = BoolProperty(
             name="Blank material",
@@ -167,11 +172,11 @@ class ExportDSQ(bpy.types.Operator, ExportHelper):
             options={'HIDDEN'},
             )
 
-    # use_selection = BoolProperty(
-    #         name="Selection Only",
-    #         description="Export selected objects only",
-    #         default=False,
-    #         )
+    select_marker = BoolProperty(
+            name="Selection only",
+            description="Export selected timeline markers only",
+            default=False,
+            )
 
     debug_report = BoolProperty(
         name="Write debug report",

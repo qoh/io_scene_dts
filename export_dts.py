@@ -90,11 +90,13 @@ def export_material(mat, shape):
 def seq_float_eq(a, b):
     return all(abs(i - j) < 0.000001 for i, j in zip(a, b))
 
-def export_all_nodes(lookup, shape, obs, parent=-1):
+def export_all_nodes(lookup, shape, select_object, obs, parent=-1):
     for ob in obs:
-        # if ob.type == "ARMATURE" or ob.type == "EMPTY":
-        # Armature nodes disabled. What could go wrong?
         if ob.type == "EMPTY":
+            if select_object and not ob.select:
+                lookup[ob] = False
+                continue
+            
             loc, rot, scale = ob.matrix_local.decompose()
 
             if not seq_float_eq((1, 1, 1), scale):
@@ -112,9 +114,11 @@ def export_all_nodes(lookup, shape, obs, parent=-1):
             shape.nodes.append(node)
             lookup[ob] = node
 
-            export_all_nodes(lookup, shape, ob.children, node)
+            export_all_nodes(lookup, shape, select_object, ob.children, node)
 
 def save(operator, context, filepath,
+         select_object=False,
+         select_marker=False,
          blank_material=True,
          generate_texture="disabled",
          apply_modifiers=True,
@@ -131,7 +135,7 @@ def save(operator, context, filepath,
 
     # Create a DTS node for every armature/empty in the scene
     node_lookup = {}
-    export_all_nodes(node_lookup, shape, filter(lambda o: not o.parent, scene.objects))
+    export_all_nodes(node_lookup, shape, select_object, filter(lambda o: not o.parent, scene.objects))
 
     # Sort by node indices from the DTS
     shape.nodes = list(sorted(shape.nodes, key=lambda n: n.bl_ob.get("nodeIndex", sys.maxsize)))
@@ -162,6 +166,9 @@ def save(operator, context, filepath,
     for bobj in scene.objects:
         if bobj.type != "MESH":
             continue
+        
+        if select_object and not bobj.select:
+            continue
 
         if bobj.name.lower() == "bounds":
             if bounds_ob:
@@ -190,6 +197,9 @@ def save(operator, context, filepath,
         if bobj.parent:
             if bobj.parent not in node_lookup:
                 return fail(operator, "The mesh '{}' has a parent of type '{}' (named '{}'). You can only parent meshes to empties, not other meshes.".format(bobj.name, bobj.parent.type, bobj.parent.name))
+            
+            if node_lookup[bobj.parent] is False: # not selected
+                continue
 
             attach_node = node_lookup[bobj.parent]
         else:
@@ -416,7 +426,7 @@ def save(operator, context, filepath,
         (shape.bounds.min.y + shape.bounds.max.y) / 2,
         (shape.bounds.min.z + shape.bounds.max.z) / 2))
     
-    sequences, sequence_flags = find_seqs(context.scene)
+    sequences, sequence_flags = find_seqs(context.scene, select_marker)
 
     for name, markers in sequences.items():
         print("Exporting sequence", name)
