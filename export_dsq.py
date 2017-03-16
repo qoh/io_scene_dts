@@ -39,6 +39,7 @@ def save(operator, context, filepath,
 
     # NodeOrder backwards compatibility
     if "NodeOrder" in bpy.data.texts:
+        print("Warning: NodeOrder found, using it for backwards compatibility")
         order = bpy.data.texts["NodeOrder"].as_string().split("\n")
         order_key = {name: i for i, name in enumerate(order)}
     else:
@@ -46,7 +47,7 @@ def save(operator, context, filepath,
 
     # Sort by node indices from the DTS
     dsq.nodes = list(sorted(dsq.nodes, key=lambda n:
-        node_ob[n].get("nodeIndex", order_key.get(n, sys.maxsize))))
+        order_key.get(n, node_ob[n].get("nodeIndex", sys.maxsize))))
 
     node_index = {node_ob[name]: i for i, name in enumerate(dsq.nodes)}
     auto_root_index = None

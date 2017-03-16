@@ -139,6 +139,7 @@ def save(operator, context, filepath,
 
     # NodeOrder backwards compatibility
     if "NodeOrder" in bpy.data.texts:
+        print("Warning: NodeOrder found, using it for backwards compatibility")
         order = bpy.data.texts["NodeOrder"].as_string().split("\n")
         order_key = {name: i for i, name in enumerate(order)}
     else:
@@ -146,7 +147,7 @@ def save(operator, context, filepath,
 
     # Sort by node indices from the DTS
     shape.nodes = list(sorted(shape.nodes, key=lambda n:
-        n.bl_ob.get("nodeIndex", order_key.get(shape.names[n.name], sys.maxsize))))
+        order_key.get(shape.names[n.name], n.bl_ob.get("nodeIndex", sys.maxsize))))
 
     node_indices = {}
 
