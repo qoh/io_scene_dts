@@ -133,6 +133,10 @@ def save(operator, context, filepath,
     auto_root_index = None
     reference_frame = find_reference(context.scene)
 
+    if reference_frame:
+        print("Note: Seeking to reference frame at", reference_frame)
+        scene.frame_set(reference_frame)
+
     # Create a DTS node for every armature/empty in the scene
     node_lookup = {}
     export_all_nodes(node_lookup, shape, select_object, filter(lambda o: not o.parent, scene.objects))
