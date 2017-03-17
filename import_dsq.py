@@ -156,24 +156,28 @@ def load(operator, context, filepath,
           key.co = (last_frame + frameIndex * step, rot[curve.array_index])
 
     for mattersIndex, ob in enumerate(nodesScale):
+      curves = ob_scale_curves(ob)
+
       for frameIndex in range(seq.numKeyframes):
-        old = ob.scale
         index = seq.baseScale + mattersIndex * seq.numKeyframes + frameIndex
 
         if seq.flags & Sequence.UniformScale:
           s = dsq.uniform_scales[index]
-          ob.scale = s, s, s
+          scale = s, s, s
         elif seq.flags & Sequence.AlignedScale:
-          ob.scale = dsq.aligned_scales[index]
+          scale = dsq.aligned_scales[index]
         elif seq.flags & Sequence.ArbitraryScale:
           print("Warning: Arbitrary scale animation not implemented")
           break
         else:
           print("Warning: Invalid scale flags found in sequence")
           break
-
-        ob.keyframe_insert("scale", index=-1, frame=last_frame + frameIndex * step)
-        ob.scale = old
+        
+        for curve in curves:
+          curve.keyframe_points.add(1)
+          key = curve.keyframe_points[-1]
+          key.interpolation = "LINEAR"
+          key.co = (last_frame + frameIndex * step, scale[curve.array_index])
 
     context.scene.timeline_markers.new(name + ":start", last_frame)
     context.scene.timeline_markers.new(name + ":end", last_frame + seq.numKeyframes)
