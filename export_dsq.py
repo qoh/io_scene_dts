@@ -6,7 +6,7 @@ from itertools import groupby
 from .DsqFile import DsqFile
 from .DtsTypes import *
 from .util import fail, evaluate_all, find_reference, array_from_fcurves, \
-    fcurves_keyframe_in_range, transform_co, transform_normal
+    fcurves_keyframe_in_range
 from .shared_export import find_seqs
 
 def save(operator, context, filepath,

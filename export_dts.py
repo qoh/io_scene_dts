@@ -7,7 +7,7 @@ from .DtsShape import DtsShape
 from .DtsTypes import *
 from .write_report import write_debug_report
 from .util import fail, resolve_texture, default_materials, evaluate_all, find_reference, \
-    array_from_fcurves, fcurves_keyframe_in_range, transform_co, transform_normal
+    array_from_fcurves, fcurves_keyframe_in_range
 from .shared_export import find_seqs
 
 import re
@@ -90,6 +90,12 @@ def export_material(mat, shape):
 def seq_float_eq(a, b):
     return all(abs(i - j) < 0.000001 for i, j in zip(a, b))
 
+def transform_co(ob, co):
+    return ob.matrix_local * co
+
+def transform_normal(ob, normal):
+    return (ob.matrix_local.to_3x3() * normal).normalized()
+
 def export_all_nodes(lookup, shape, select_object, obs, parent=-1):
     for ob in obs:
         if ob.type == "EMPTY":
@@ -122,7 +128,7 @@ def save(operator, context, filepath,
          blank_material=True,
          generate_texture="disabled",
          apply_modifiers=True,
-         transform_mesh=True,
+         transform_mesh=False,
          debug_report=False):
     print("Exporting scene to DTS")
 
@@ -357,7 +363,7 @@ def save(operator, context, filepath,
                             else:
                                 normal = vert.normal
 
-                            if transform_mesh and False:
+                            if transform_mesh:
                                 dmesh.verts.append(transform_co(bobj, vert.co))
                                 dmesh.normals.append(transform_normal(bobj, normal))
                             else:

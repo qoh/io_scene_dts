@@ -141,12 +141,6 @@ def fcurves_keyframe_in_range(curves, start, end):
 
     return False
 
-def transform_co(ob, co):
-    return ob.matrix_world * co
-
-def transform_normal(ob, normal):
-    return (ob.matrix_world.to_3x3() * normal).normalized()
-
 def find_reference(scene):
     reference_marker = scene.timeline_markers.get("reference")
     if reference_marker is not None:
