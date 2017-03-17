@@ -160,12 +160,12 @@ def load(operator, context, filepath,
         old = ob.scale
         index = seq.baseScale + mattersIndex * seq.numKeyframes + frameIndex
 
-        if seq.UniformScale:
+        if seq.flags & Sequence.UniformScale:
           s = dsq.uniform_scales[index]
           ob.scale = s, s, s
-        elif seq.AlignedScale:
+        elif seq.flags & Sequence.AlignedScale:
           ob.scale = dsq.aligned_scales[index]
-        elif seq.ArbitraryScale:
+        elif seq.flags & Sequence.ArbitraryScale:
           print("Warning: Arbitrary scale animation not implemented")
           break
         else:
