@@ -252,17 +252,6 @@ def load(operator, context, filepath,
 
     for i, node in enumerate(shape.nodes):
         node.tail = get_node_tail(i, node, shape)
-        node.has_any_users = False
-
-    for obj in shape.objects:
-        if shape.names[obj.name] not in blockhead_nodes:
-            continue
-
-        node = obj.node
-
-        while node != -1:
-            shape.nodes[node].has_any_users = True
-            node = shape.nodes[node].parent
 
     bpy.ops.object.mode_set(mode="EDIT")
 
@@ -270,36 +259,19 @@ def load(operator, context, filepath,
     bone_names = []
 
     for i, node in enumerate(shape.nodes):
-        if not node.has_any_users:
-            edit_bone_table.append(True)
-            bone_names.append(None)
-            continue
-
         bone = root_arm.edit_bones.new(shape.names[node.name])
 
         if hacky_new_bone_connect:
             bone.use_connect = True
-
+        
+        bone.head = node.head
+        bone.tail = node.tail
+        
         if node.parent != -1:
             parent_bone = edit_bone_table[node.parent]
-
             bone.parent = parent_bone
-            bone.head = node.head
-            bone.tail = node.tail
-
-            vp = bone.parent.tail - bone.parent.head
-            vc = bone.tail - bone.head
-            vc.normalize()
-            vp.normalize()
-
-            if vp.dot(vc) > -0.8:
-                bone.roll = bone.parent.roll
-            else:
-                bone.roll = -bone.parent.roll
-        else:
-            bone.head = node.head
-            bone.tail = node.tail
-            bone.roll = math.radians(90)
+        
+        bone.matrix = node.mat
 
         edit_bone_table.append(bone)
         bone_names.append(bone.name)
@@ -346,8 +318,6 @@ def load(operator, context, filepath,
             context.scene.objects.link(bobj)
 
             if obj.node != -1:
-                # bobj.location = bones_indexed[obj.node].head
-                # bobj.matrix_world = shape.nodes[obj.node].mat
                 bobj.parent = root_ob
                 bobj.parent_bone = bone_names[obj.node]
                 bobj.parent_type = "BONE"
