@@ -214,8 +214,23 @@ def get_node_tail(i, node, shape):
 def file_base_name(filepath):
     return os.path.basename(filepath).rsplit(".", 1)[0]
 
-def load_new(operator, context, filepath, shape,
-             hacky_new_bone_connect=True):
+def load(operator, context, filepath,
+         hide_default_player=False,
+         import_node_order=False,
+         reference_keyframe=False,
+         import_sequences=True,
+         debug_report=False,
+         hacky_new_bone_connect=True):
+    shape = DtsShape()
+
+    with open(filepath, "rb") as fd:
+        shape.load(fd)
+
+    if debug_report:
+        write_debug_report(filepath + ".txt", shape)
+        with open(filepath + ".pass.dts", "wb") as fd:
+            shape.save(fd)
+    
     root_arm = bpy.data.armatures.new(file_base_name(filepath))
     root_ob = bpy.data.objects.new(root_arm.name, root_arm)
 
@@ -347,266 +362,5 @@ def load_new(operator, context, filepath, shape,
                 bpy.data.groups.new(lod_name)
 
             bpy.data.groups[lod_name].objects.link(bobj)
-
-    return {"FINISHED"}
-
-def load(operator, context, filepath,
-         hide_default_player=False,
-         import_node_order=False,
-         reference_keyframe=False,
-         import_sequences=True,
-         debug_report=False,
-         hacky_new_bone_import=False,
-         hacky_new_bone_connect=True):
-    shape = DtsShape()
-
-    with open(filepath, "rb") as fd:
-        shape.load(fd)
-
-    if debug_report:
-        write_debug_report(filepath + ".txt", shape)
-        with open(filepath + ".pass.dts", "wb") as fd:
-            shape.save(fd)
-    
-    if hacky_new_bone_import:
-        return load_new(operator, context, filepath, shape, hacky_new_bone_connect)
-
-    # Create a Blender material for each DTS material
-    materials = {}
-    color_source = get_rgb_colors()
-
-    for dmat in shape.materials:
-        materials[dmat] = import_material(color_source, dmat, filepath)
-
-    # Now assign IFL material properties where needed
-    for ifl in shape.iflmaterials:
-        mat = materials[shape.materials[ifl.slot]]
-        assert mat["ifl"] == True
-        mat["iflName"] = shape.names[ifl.name]
-        mat["iflFirstFrame"] = ifl.firstFrame
-        mat["iflNumFrames"] = ifl.numFrames
-        mat["iflTime"] = ifl.time
-
-    # First load all the nodes into armatures
-    lod_by_mesh = {}
-
-    for lod in shape.detail_levels:
-        lod_by_mesh[lod.objectDetail] = lod
-
-    if import_node_order:
-        if "NodeOrder" in bpy.data.texts:
-            order_buf = bpy.data.texts["NodeOrder"]
-        else:
-            order_buf = bpy.data.texts.new("NodeOrder")
-
-        order_buf.from_string("\n".join(shape.names[node.name] for node in shape.nodes))
-
-    node_obs = []
-    node_obs_val = {}
-
-    if reference_keyframe:
-        reference_marker = context.scene.timeline_markers.get("reference")
-        if reference_marker is None:
-            reference_frame = 0
-            context.scene.timeline_markers.new("reference", reference_frame)
-        else:
-            reference_frame = reference_marker.frame
-    else:
-        reference_frame = None
-
-    for i, node in enumerate(shape.nodes):
-        ob = bpy.data.objects.new(dedup_name(bpy.data.objects, shape.names[node.name]), None)
-        ob.empty_draw_type = "SINGLE_ARROW"
-        ob.empty_draw_size = 0.5
-
-        if node.parent != -1:
-            ob.parent = node_obs[node.parent]
-
-        ob.location = shape.default_translations[i]
-        ob.rotation_mode = "QUATERNION"
-        ob.rotation_quaternion = shape.default_rotations[i]
-
-        context.scene.objects.link(ob)
-        node_obs.append(ob)
-        node_obs_val[node] = ob
-
-        if reference_keyframe:
-            curves = ob_location_curves(ob)
-            for curve in curves:
-                curve.keyframe_points.add(1)
-                key = curve.keyframe_points[-1]
-                key.interpolation = "LINEAR"
-                key.co = (reference_frame, ob.location[curve.array_index])
-            
-            curves = ob_scale_curves(ob)
-            for curve in curves:
-                curve.keyframe_points.add(1)
-                key = curve.keyframe_points[-1]
-                key.interpolation = "LINEAR"
-                key.co = (reference_frame, ob.scale[curve.array_index])
-            
-            _, curves = ob_rotation_curves(ob)
-            for curve in curves:
-                curve.keyframe_points.add(1)
-                key = curve.keyframe_points[-1]
-                key.interpolation = "LINEAR"
-                key.co = (reference_frame, ob.rotation_quaternion[curve.array_index])
-    
-    # Try animation?
-    if import_sequences:
-        globalToolIndex = 10
-        fps = context.scene.render.fps
-
-        sequences_text = []
-
-        for seq in shape.sequences:
-            name = shape.names[seq.nameIndex]
-            print("Importing sequence", name)
-
-            flags = []
-            flags.append("priority {}".format(seq.priority))
-
-            if seq.flags & Sequence.Cyclic:
-                flags.append("cyclic")
-
-            if seq.flags & Sequence.Blend:
-                flags.append("blend")
-
-            if flags:
-                sequences_text.append(name + ": " + ", ".join(flags))
-
-            nodesRotation = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.rotationMatters))))
-            nodesTranslation = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.translationMatters))))
-            nodesScale = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.scaleMatters))))
-
-            step = 1
-
-            for mattersIndex, node in enumerate(nodesTranslation):
-                ob = node_obs_val[node]
-                curves = ob_location_curves(ob)
-
-                for frameIndex in range(seq.numKeyframes):
-                    vec = shape.node_translations[seq.baseTranslation + mattersIndex * seq.numKeyframes + frameIndex]
-                    if seq.flags & Sequence.Blend:
-                        if reference_frame is None:
-                            return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
-                        ref_vec = Vector(evaluate_all(curves, reference_frame))
-                        vec = ref_vec + vec
-
-                    for curve in curves:
-                        curve.keyframe_points.add(1)
-                        key = curve.keyframe_points[-1]
-                        key.interpolation = "LINEAR"
-                        key.co = (
-                            globalToolIndex + frameIndex * step,
-                            vec[curve.array_index])
-
-            for mattersIndex, node in enumerate(nodesRotation):
-                ob = node_obs_val[node]
-                mode, curves = ob_rotation_curves(ob)
-
-                for frameIndex in range(seq.numKeyframes):
-                    rot = shape.node_rotations[seq.baseRotation + mattersIndex * seq.numKeyframes + frameIndex]
-                    if seq.flags & Sequence.Blend:
-                        if reference_frame is None:
-                            return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
-                        ref_rot = Quaternion(evaluate_all(curves, reference_frame))
-                        rot = ref_rot * rot
-                    if mode != "QUATERNION":
-                        rot = rot.to_euler(mode)
-
-                    for curve in curves:
-                        curve.keyframe_points.add(1)
-                        key = curve.keyframe_points[-1]
-                        key.interpolation = "LINEAR"
-                        key.co = (
-                            globalToolIndex + frameIndex * step,
-                            rot[curve.array_index])
-
-            for mattersIndex, node in enumerate(nodesScale):
-                ob = node_obs_val[node]
-                curves = ob_scale_curves(ob)
-
-                for frameIndex in range(seq.numKeyframes):
-                    index = seq.baseScale + mattersIndex * seq.numKeyframes + frameIndex
-                    vec = shape.node_translations[seq.baseTranslation + mattersIndex * seq.numKeyframes + frameIndex]
-
-                    if seq.UniformScale:
-                        s = shape.node_uniform_scales[index]
-                        vec = (s, s, s)
-                    elif seq.AlignedScale:
-                        vec = shape.node_aligned_scales[index]
-                    elif seq.ArbitraryScale:
-                        print("Warning: Arbitrary scale animation not implemented")
-                        break
-                    else:
-                        print("Warning: Invalid scale flags found in sequence")
-                        break
-
-                    for curve in curves:
-                        curve.keyframe_points.add(1)
-                        key = curve.keyframe_points[-1]
-                        key.interpolation = "LINEAR"
-                        key.co = (
-                            globalToolIndex + frameIndex * step,
-                            vec[curve.array_index])
-
-            context.scene.timeline_markers.new(name + ":start", globalToolIndex)
-            context.scene.timeline_markers.new(name + ":end", globalToolIndex + seq.numKeyframes * step)
-            globalToolIndex += seq.numKeyframes * step + 30
-
-        if "Sequences" in bpy.data.texts:
-            sequences_buf = bpy.data.texts["Sequences"]
-        else:
-            sequences_buf = bpy.data.texts.new("Sequences")
-
-        sequences_buf.from_string("\n".join(sequences_text))
-
-    # Then put objects in the armatures
-    for obj in shape.objects:
-        for meshIndex in range(obj.numMeshes):
-            mesh = shape.meshes[obj.firstMesh + meshIndex]
-
-            if mesh.type == Mesh.NullType:
-                continue
-
-            if mesh.type != Mesh.StandardType:
-                print("{} is a {} mesh, unsupported, but trying".format(
-                    shape.names[obj.name], mesh.type))
-                # continue
-
-            bmesh = create_bmesh(mesh, materials, shape)
-            bobj = bpy.data.objects.new(dedup_name(bpy.data.objects, shape.names[obj.name]), bmesh)
-            context.scene.objects.link(bobj)
-
-            if obj.node != -1:
-                bobj.parent = node_obs[obj.node]
-
-            if hide_default_player and shape.names[obj.name] not in blockhead_nodes:
-                bobj.hide = True
-
-            lod_name = shape.names[lod_by_mesh[meshIndex].name]
-
-            if lod_name not in bpy.data.groups:
-                bpy.data.groups.new(lod_name)
-
-            bpy.data.groups[lod_name].objects.link(bobj)
-
-    # Import a bounds mesh
-    me = bpy.data.meshes.new("Mesh")
-    me.vertices.add(8)
-    me.vertices[0].co = (shape.bounds.min.x, shape.bounds.min.y, shape.bounds.min.z)
-    me.vertices[1].co = (shape.bounds.max.x, shape.bounds.min.y, shape.bounds.min.z)
-    me.vertices[2].co = (shape.bounds.max.x, shape.bounds.max.y, shape.bounds.min.z)
-    me.vertices[3].co = (shape.bounds.min.x, shape.bounds.max.y, shape.bounds.min.z)
-    me.vertices[4].co = (shape.bounds.min.x, shape.bounds.min.y, shape.bounds.max.z)
-    me.vertices[5].co = (shape.bounds.max.x, shape.bounds.min.y, shape.bounds.max.z)
-    me.vertices[6].co = (shape.bounds.max.x, shape.bounds.max.y, shape.bounds.max.z)
-    me.vertices[7].co = (shape.bounds.min.x, shape.bounds.max.y, shape.bounds.max.z)
-    me.validate()
-    me.update()
-    ob = bpy.data.objects.new("bounds", me)
-    ob.draw_type = "BOUNDS"
-    context.scene.objects.link(ob)
 
     return {"FINISHED"}
