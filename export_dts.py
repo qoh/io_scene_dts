@@ -114,6 +114,16 @@ def export_all_nodes(lookup, shape, obs, parent=-1):
 
             export_all_nodes(lookup, shape, ob.children, node)
 
+def export_bones(lookup, shape, bones, parent=-1):
+    for bone in bones:
+        node = Node(shape.name(bone.name), parent)
+        node.bone = bone
+        node.translation = bone.head
+        node.rotation = bone.matrix_local.to_quaternion()
+        shape.nodes.append(node)
+        lookup[bone] = node
+        export_bones(lookup, shape, bone.children, node)
+
 def save(operator, context, filepath,
          blank_material=True,
          generate_texture="disabled",
@@ -128,9 +138,18 @@ def save(operator, context, filepath,
     blank_material_index = None
     auto_root_index = None
 
-    # Create a DTS node for every armature/empty in the scene
+    # Find a root level armature
+    for ob in scene.objects:
+        if not ob.parent and ob.type == "ARMATURE":
+            armature = ob
+            break
+    else:
+        return fail(operator, "No root armature found")
+    
+    print("Using root armature {}".format(ob.name))
+
     node_lookup = {}
-    export_all_nodes(node_lookup, shape, filter(lambda o: not o.parent, scene.objects))
+    export_bones(node_lookup, shape, filter(lambda o: not o.parent, armature.data.bones))
 
     # Figure out if we should create our own root node
     if "NodeOrder" in bpy.data.texts:
@@ -158,12 +177,6 @@ def save(operator, context, filepath,
         shape.default_rotations.append(node.rotation)
 
     node_lookup = {ob: node_indices[node] for ob, node in node_lookup.items()}
-    animated_nodes = []
-
-    for node in shape.nodes:
-        data = node.bl_ob.animation_data
-        if data and data.action and len(data.action.fcurves):
-            animated_nodes.append(node.bl_ob)
 
     # Now that we have all the nodes, attach our fabled objects to them
     scene_lods = {}
@@ -198,26 +211,13 @@ def save(operator, context, filepath,
 
         if lod_name == "__ignore__":
             continue
-
-        if bobj.parent:
-            if bobj.parent not in node_lookup:
-                return fail(operator, "The mesh '{}' has a parent of type '{}' (named '{}'). You can only parent meshes to empties, not other meshes.".format(bobj.name, bobj.parent.type, bobj.parent.name))
-
-            attach_node = node_lookup[bobj.parent]
-        else:
-            print("Warning: Mesh '{}' has no parent".format(bobj.name))
-
-            if auto_root_index is None:
-                # This check has been disabled for now. What could go wrong?!
-                # if "NodeOrder" in bpy.data.texts and "__auto_root__" not in order_key:
-                #     return fail(operator, "The mesh '{}' does not have a parent. Normally, the exporter would create a temporary parent for you to fix this, but you have a specified NodeOrder (may be created by previously importing a DTS file and not pressing Ctrl+N after you're done with it), which does not have the '__auto_root__' entry (name used for the automatic parent).".format(bobj.name))
-
-                auto_root_index = len(shape.nodes)
-                shape.nodes.append(Node(shape.name("__auto_root__")))
-                shape.default_rotations.append(Quaternion())
-                shape.default_translations.append(Vector())
-
-            attach_node = auto_root_index
+        
+        if bobj.parent != armature:
+            continue
+        if bobj.parent_type != "BONE":
+            return fail(operator, "Mesh '{}' is not parented to a bone".format(bobj.name))
+        parent_bone = armature.data.bones[bobj.parent_bone]
+        attach_node = node_lookup[parent_bone]
 
         lod_name_index, lod_name = shape.name_resolve(lod_name)
 
@@ -432,128 +432,6 @@ def save(operator, context, filepath,
         (shape.bounds.min.y + shape.bounds.max.y) / 2,
         (shape.bounds.min.z + shape.bounds.max.z) / 2))
     
-    sequences, sequence_flags = find_seqs(context.scene)
-    reference_frame = find_reference(context.scene)
-
-    for name, markers in sequences.items():
-        print("Exporting sequence", name)
-
-        if "start" not in markers:
-            return fail(operator, "Missing start marker for sequence '{}'".format(name))
-
-        if "end" not in markers:
-            return fail(operator, "Missing end marker for sequence '{}'".format(name))
-
-        seq = Sequence()
-        seq.nameIndex = shape.name(name)
-        seq.flags = Sequence.AlignedScale
-        seq.priority = 1
-
-        if name in sequence_flags:
-            for part in sequence_flags[name]:
-                flag, *data = part.split(" ", 1)
-                if data: data = data[0]
-
-                if flag == "priority":
-                    seq.priority = int(data)
-                elif flag == "cyclic":
-                    seq.flags |= Sequence.Cyclic
-                elif flag == "blend":
-                    seq.flags |= Sequence.Blend
-                else:
-                    print("Warning: Unknown flag '{}' (used by sequence '{}')".format(flag, name))
-
-        frame_start = markers["start"].frame
-        frame_end = markers["end"].frame
-        frame_range = frame_end - frame_start + 1
-
-        seq.toolBegin = frame_start
-        seq.duration = frame_range * (context.scene.render.fps_base / context.scene.render.fps)
-
-        seq.numKeyframes = frame_range
-        seq.firstGroundFrame = len(shape.ground_translations)
-        seq.baseRotation = len(shape.node_rotations)
-        seq.baseTranslation = len(shape.node_translations)
-        seq.baseScale = len(shape.node_aligned_scales)
-        seq.baseObjectState = len(shape.objectstates)
-        seq.baseDecalState = len(shape.decalstates)
-        seq.firstTrigger = len(shape.triggers)
-
-        seq.rotationMatters = [False] * len(shape.nodes)
-        seq.translationMatters = [False] * len(shape.nodes)
-        seq.scaleMatters = [False] * len(shape.nodes)
-        seq.decalMatters = [False] * len(shape.nodes)
-        seq.iflMatters = [False] * len(shape.nodes)
-        seq.visMatters = [False] * len(shape.nodes)
-        seq.frameMatters = [False] * len(shape.nodes)
-        seq.matFrameMatters = [False] * len(shape.nodes)
-
-        shape.sequences.append(seq)
-
-        seq_curves_rotation = []
-        seq_curves_translation = []
-        seq_curves_scale = []
-
-        for ob in animated_nodes:
-            index = node_lookup[ob]
-            fcurves = ob.animation_data.action.fcurves
-
-            if ob.rotation_mode == "QUATERNION":
-                curves_rotation = array_from_fcurves(fcurves, "rotation_quaternion", 4)
-            elif ob.rotation_mode == "XYZ":
-                curves_rotation = array_from_fcurves(fcurves, "rotation_euler", 3)
-            else:
-                return fail(operator, "Animated node '{}' uses unsupported rotation_mode '{}'".format(ob.name, ob.rotation_mode))
-
-            curves_translation = array_from_fcurves(fcurves, "location", 3)
-            curves_scale = array_from_fcurves(fcurves, "scale", 3)
-
-            if curves_rotation and fcurves_keyframe_in_range(curves_rotation, frame_start, frame_end):
-                print("rotation matters for", ob.name)
-                seq_curves_rotation.append((curves_rotation, ob.rotation_mode))
-                seq.rotationMatters[index] = True
-
-            if curves_translation and fcurves_keyframe_in_range(curves_translation, frame_start, frame_end):
-                print("translation matters for", ob.name)
-                seq_curves_translation.append(curves_translation)
-                seq.translationMatters[index] = True
-
-            if curves_scale and fcurves_keyframe_in_range(curves_scale, frame_start, frame_end):
-                print("scale matters for", ob.name)
-                seq_curves_scale.append(curves_scale)
-                seq.scaleMatters[index] = True
-
-        frame_indices = list(range(frame_start, frame_end + 1))
-
-        for (curves, mode) in seq_curves_rotation:
-            for frame in frame_indices:
-                if mode == "QUATERNION":
-                    r = Quaternion(evaluate_all(curves, frame))
-                elif mode == "XYZ":
-                    r = Euler(evaluate_all(curves, frame), "XYZ").to_quaternion()
-                else:
-                    assert false, "unknown rotation_mode after finding matters"
-                if seq.flags & Sequence.Blend:
-                    if reference_frame is None:
-                        return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
-                    ref_r = Quaternion(evaluate_all(curves, reference_frame))
-                    r = ref_r.inverted() * r
-                shape.node_rotations.append(r)
-
-        for curves in seq_curves_translation:
-            for frame in frame_indices:
-                v = Vector(evaluate_all(curves, frame))
-                if seq.flags & Sequence.Blend:
-                    if reference_frame is None:
-                        return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
-                    ref_v = Vector(evaluate_all(curves, reference_frame))
-                    v -= ref_v
-                shape.node_translations.append(v)
-
-        for curves in seq_curves_scale:
-            for frame in frame_indices:
-                shape.node_aligned_scales.append(Vector(evaluate_all(curves, frame)))
-
     if debug_report:
         print("Writing debug report")
         write_debug_report(filepath + ".txt", shape)

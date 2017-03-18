@@ -271,6 +271,8 @@ def load(operator, context, filepath,
             parent_bone = edit_bone_table[node.parent]
             bone.parent = parent_bone
         
+        print(bone.name, shape.default_rotations[i], shape.default_translations[i])
+        
         bone.matrix = node.mat
 
         edit_bone_table.append(bone)
