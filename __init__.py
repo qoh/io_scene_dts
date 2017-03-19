@@ -25,6 +25,7 @@ if "bpy" in locals():
 import bpy
 from bpy.props import (BoolProperty,
                        FloatProperty,
+                       IntProperty,
                        StringProperty,
                        EnumProperty,
                        )
@@ -153,6 +154,37 @@ class ExportDTS(bpy.types.Operator, ExportHelper):
         )
 
     check_extension = True
+
+    # def invoke(self, context, event):
+    #     return self.execute(context)
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, "select_object")
+        layout.prop(self, "select_marker")
+        layout.prop(self, "blank_material")
+        layout.prop(self, "generate_texture")
+        layout.prop(self, "transform_mesh")
+        layout.prop(self, "apply_modifiers")
+        layout.prop(self, "debug_report")
+        for marker in context.scene.timeline_markers:
+            split = marker.name.split(":")
+            if len(split) != 2:
+                continue
+            sequence_name = split[0]
+            for sequence in context.scene.dts_sequences:
+                if sequence.name == sequence_name:
+                    break
+            else:
+                sequence = context.scene.dts_sequences.add()
+                sequence.name = sequence_name
+        for instance in context.scene.dts_sequences:
+            layout.separator()
+            row = layout.row()
+            row.label(instance.name)
+            row.prop(instance, "cyclic")
+            row.prop(instance, "blend")
+            layout.prop(instance, "priority")
 
     def execute(self, context):
         from . import export_dts
@@ -315,6 +347,36 @@ class HideBlockheadNodes(bpy.types.Operator):
 
         return {"FINISHED"}
 
+class SequenceSettings(bpy.types.PropertyGroup):
+    name = StringProperty(
+        options={'HIDDEN'})
+    cyclic = BoolProperty(
+        name="Cyclic",
+        description="Loop the animation",
+        default=False)
+    blend = BoolProperty(
+        name="Blend",
+        description="Requires a reference marker",
+        default=False)
+    priority = IntProperty(
+        name="Priority",
+        description="Effective order key for animation priority",
+        default=1)
+
+class DtsSettingsPanel(bpy.types.Panel):
+    bl_space_type = "PROPERTIES"
+    bl_region_type = "WINDOW"
+    bl_context = "scene"
+    bl_label = "DTS Settings"
+
+    def draw(self, context):
+        for instance in context.scene.dts_sequences:
+            self.layout.label(instance.name)
+            row = self.layout.row()
+            row.prop(instance, "cyclic")
+            row.prop(instance, "blend")
+            self.layout.prop(instance, "priority")
+
 def menu_func_import_dts(self, context):
     self.layout.operator(ImportDTS.bl_idname, text="Torque (.dts)")
 
@@ -329,6 +391,9 @@ def menu_func_export_dsq(self, context):
 
 def register():
     bpy.utils.register_module(__name__)
+    bpy.types.Scene.dts_sequences = bpy.props.CollectionProperty(
+        attr="dts_sequences",
+        type=SequenceSettings)
 
     bpy.types.INFO_MT_file_import.append(menu_func_import_dts)
     bpy.types.INFO_MT_file_import.append(menu_func_import_dsq)
