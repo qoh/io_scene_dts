@@ -118,8 +118,13 @@ def export_bones(lookup, shape, bones, parent=-1):
     for bone in bones:
         node = Node(shape.name(bone.name), parent)
         node.bone = bone
-        node.translation = bone.head
-        node.rotation = bone.matrix_local.to_quaternion()
+        mat = bone.matrix_local
+        if bone.parent:
+            mat = bone.parent.matrix_local.inverted() * mat
+        # node.translation = bone.head
+        # node.rotation = bone.matrix_local.to_quaternion()
+        node.translation = mat.to_translation()
+        node.rotation = mat.to_quaternion()
         shape.nodes.append(node)
         lookup[bone] = node
         export_bones(lookup, shape, bone.children, node)
