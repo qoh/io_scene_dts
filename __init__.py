@@ -21,6 +21,16 @@ if "bpy" in locals():
     if "export_dsq" in locals():
         importlib.reload(export_dsq)
 
+is_developer = False
+try:
+    from .developer import is_developer
+except ImportError:
+    pass
+
+if is_developer:
+    debug_prop_options = set()
+else:
+    debug_prop_options = {'HIDDEN'}
 
 import bpy
 from bpy.props import (BoolProperty,
@@ -42,25 +52,26 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
 
     filename_ext = ".dts"
     filter_glob = StringProperty(
-            default="*.dts",
-            options={'HIDDEN'},
-            )
+        default="*.dts",
+        options={'HIDDEN'},
+        )
 
     reference_keyframe = BoolProperty(
-            name="Reference keyframe",
-            description="Set a keyframe with the reference pose for blend animations",
-            default=True,
-            )
+        name="Reference keyframe",
+        description="Set a keyframe with the reference pose for blend animations",
+        default=True,
+        )
 
     import_sequences = BoolProperty(
-            name="Import sequences",
-            description="Automatically add keyframes for embedded sequences",
-            default=True,
-            )
-
+        name="Import sequences",
+        description="Automatically add keyframes for embedded sequences",
+        default=True,
+        )
+    
     debug_report = BoolProperty(
         name="Write debug report",
         description="Dump out all the information from the DTS to a file",
+        options=debug_prop_options,
         default=False,
         )
 
@@ -69,7 +80,7 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
 
         keywords = self.as_keywords(ignore=("filter_glob", "split_mode"))
         return import_dts.load(self, context, **keywords)
-
+    
 class ImportDSQ(bpy.types.Operator, ImportHelper):
     """Load a Torque DSQ File"""
     bl_idname = "import_scene.dsq"
@@ -78,13 +89,14 @@ class ImportDSQ(bpy.types.Operator, ImportHelper):
 
     filename_ext = ".dsq"
     filter_glob = StringProperty(
-            default="*.dsq",
-            options={'HIDDEN'},
-            )
+        default="*.dsq",
+        options={'HIDDEN'},
+        )
 
     debug_report = BoolProperty(
         name="Write debug report",
         description="Dump out all the information from the DSQ to a file",
+        options=debug_prop_options,
         default=False,
         )
 
@@ -103,54 +115,55 @@ class ExportDTS(bpy.types.Operator, ExportHelper):
 
     filename_ext = ".dts"
     filter_glob = StringProperty(
-            default="*.dts",
-            options={'HIDDEN'},
-            )
+        default="*.dts",
+        options={'HIDDEN'},
+        )
 
     select_object = BoolProperty(
-            name="Selected objects only",
-            description="Export selected objects (empties, meshes) only",
-            default=False,
-            )
+        name="Selected objects only",
+        description="Export selected objects (empties, meshes) only",
+        default=False,
+        )
     select_marker = BoolProperty(
-            name="Selected markers only",
-            description="Export selected timeline markers only, used for sequences",
-            default=False,
-            )
+        name="Selected markers only",
+        description="Export selected timeline markers only, used for sequences",
+        default=False,
+        )
 
     blank_material = BoolProperty(
-            name="Blank material",
-            description="Add a blank material to meshes with none assigned",
-            default=True,
-            )
+        name="Blank material",
+        description="Add a blank material to meshes with none assigned",
+        default=True,
+        )
 
     generate_texture = EnumProperty(
-            name="Generate textures",
-            description="Automatically generate solid color textures for materials",
-            default="disabled",
-            items=(
-                ("disabled", "Disabled", "Do not generate any textures"),
-                ("custom-missing", "Custom (if missing)", "Generate textures for non-default material names if not already present"),
-                ("custom-always", "Custom (always)", "Generate textures for non-default material names"),
-                ("all-missing", "All (if missing)", "Generate textures for all materials if not already present"),
-                ("all-always", "All (always)", "Generate textures for all materials"))
-            )
+        name="Generate textures",
+        description="Automatically generate solid color textures for materials",
+        default="disabled",
+        items=(
+            ("disabled", "Disabled", "Do not generate any textures"),
+            ("custom-missing", "Custom (if missing)", "Generate textures for non-default material names if not already present"),
+            ("custom-always", "Custom (always)", "Generate textures for non-default material names"),
+            ("all-missing", "All (if missing)", "Generate textures for all materials if not already present"),
+            ("all-always", "All (always)", "Generate textures for all materials"))
+        )
 
     transform_mesh = BoolProperty(
-            name="Use mesh transforms",
-            description="Apply local location/rotation/scale to geometry",
-            default=True,
-            )
+        name="Use mesh transforms",
+        description="Apply local location/rotation/scale to geometry",
+        default=True,
+        )
 
     apply_modifiers = BoolProperty(
-            name="Apply modifiers",
-            description="Apply modifiers to meshes",
-            default=True,
-            )
+        name="Apply modifiers",
+        description="Apply modifiers to meshes",
+        default=True,
+        )
 
     debug_report = BoolProperty(
         name="Write debug report",
         description="Dump out all the information from the DTS to a file",
+        options=debug_prop_options,
         default=False,
         )
 
@@ -170,19 +183,20 @@ class ExportDSQ(bpy.types.Operator, ExportHelper):
 
     filename_ext = ".dsq"
     filter_glob = StringProperty(
-            default="*.dsq",
-            options={'HIDDEN'},
-            )
+        default="*.dsq",
+        options={'HIDDEN'},
+        )
 
     select_marker = BoolProperty(
-            name="Selection only",
-            description="Export selected timeline markers only",
-            default=False,
-            )
+        name="Selection only",
+        description="Export selected timeline markers only",
+        default=False,
+        )
 
     debug_report = BoolProperty(
         name="Write debug report",
         description="Dump out all the information from the DSQ to a file",
+        options=debug_prop_options,
         default=False,
         )
 
