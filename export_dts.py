@@ -39,30 +39,19 @@ def export_material(mat, shape):
         flags |= Material.SelfIlluminating
     if mat.use_transparency:
         flags |= Material.Translucent
-        default_mode = "additive"
-    else:
-        default_mode = "none"
-
-    mode = mat.get("blendMode", default_mode)
-    if mode == "additive":
+    if mat.torque_props.blend_mode == "ADDITIVE":
         flags |= Material.Additive
-    elif mode == "subtractive":
+    elif mat.torque_props.blend_mode == "SUBTRACTIVE":
         flags |= Material.Subtractive
-    elif mode == "both":
-        flags |= Material.Additive | Material.Subtractive
-    elif mode != "none":
-        print("Warning: Invalid blendMode '{}' on material '{}'".format(mode, mat.name))
 
-    if not mat.get("noSWrap"):
+    if mat.torque_props.s_wrap:
         flags |= Material.SWrap
-    if not mat.get("noTWrap"):
+    if mat.torque_props.t_wrap:
         flags |= Material.TWrap
-    if not mat.get("envMap"):
-        flags |= Material.NeverEnvMap
-    if not mat.get("mipMap"):
-        flags |= Material.NoMipMap
-
-    if mat.get("ifl"):
+    flags |= Material.NeverEnvMap
+    flags |= Material.NoMipMap
+    
+    if mat.torque_props.use_ifl:
         flags |= Material.IFLMaterial
 
         # TODO: keep IFL materials in a table by name?
@@ -70,18 +59,15 @@ def export_material(mat, shape):
 
         ifl_index = len(shape.iflmaterials)
         ifl = IflMaterial(
-            name=shape.name(mat["iflName"]),
+            name=shape.name(mat.torque_props.ifl_name),
             slot=material_index,
-            firstFrame=mat.get("iflFirstFrame", 0),
-            numFrames=mat.get("iflNumFrames", 0),
-            time=mat.get("iflTime", 0))
+            firstFrame=mat.torque_props.ifl_first_frame,
+            numFrames=mat.torque_props.ifl_num_frames,
+            time=mat.torque_props.ifl_time)
         shape.iflmaterials.append(ifl)
 
     material = Material(name=undup_name(mat.name), flags=flags)
     material.bl_mat = mat
-
-    if "texture" in mat:
-      material.name = mat["texture"]
 
     shape.materials.append(material)
 

@@ -25,8 +25,10 @@ if "bpy" in locals():
 import bpy
 from bpy.props import (BoolProperty,
                        FloatProperty,
+                       IntProperty,
                        StringProperty,
                        EnumProperty,
+                       PointerProperty,
                        )
 from bpy_extras.io_utils import (ImportHelper,
                                  ExportHelper,
@@ -315,6 +317,55 @@ class HideBlockheadNodes(bpy.types.Operator):
 
         return {"FINISHED"}
 
+class TorqueMaterialProperties(bpy.types.PropertyGroup):
+    blend_mode = EnumProperty(
+        name="Blend mode",
+        items=(
+            ("ADDITIVE", "Additive", "White is white, black is transparent"),
+            ("SUBTRACTIVE", "Subtractive", "White is black, black is transparent"),
+            ("NONE", "None", "I don't know how to explain this, try it yourself"),
+        ),
+        default="ADDITIVE")
+    s_wrap = BoolProperty(name="S-Wrap", default=True)
+    t_wrap = BoolProperty(name="T-Wrap", default=True)
+    use_ifl = BoolProperty(name="IFL")
+    ifl_name = StringProperty(name="Name")
+    ifl_first_frame = IntProperty(name="First frame")
+    ifl_num_frames = IntProperty(name="Frame count")
+    ifl_time = IntProperty(name="Time")
+
+class TorqueMaterialPanel(bpy.types.Panel):
+    bl_idname = "MATERIAL_PT_torque"
+    bl_label = "Torque"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "material"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        return (context.material is not None)
+
+    def draw(self, context):
+        layout = self.layout
+        obj = context.material
+
+        sublayout = layout.row()
+        sublayout.enabled = obj.use_transparency
+        sublayout.prop(obj.torque_props, "blend_mode", expand=True)
+
+        row = layout.row()
+        row.prop(obj.torque_props, "use_ifl")
+        sublayout = row.column()
+        sublayout.enabled = obj.torque_props.use_ifl
+        sublayout.prop(obj.torque_props, "ifl_name", text="")
+        sublayout = layout.column()
+        sublayout.enabled = obj.torque_props.use_ifl
+        row = sublayout.row()
+        row.prop(obj.torque_props, "ifl_first_frame")
+        row.prop(obj.torque_props, "ifl_num_frames")
+        sublayout.prop(obj.torque_props, "ifl_time")
+
 def menu_func_import_dts(self, context):
     self.layout.operator(ImportDTS.bl_idname, text="Torque (.dts)")
 
@@ -330,6 +381,9 @@ def menu_func_export_dsq(self, context):
 def register():
     bpy.utils.register_module(__name__)
 
+    bpy.types.Material.torque_props = PointerProperty(
+        type=TorqueMaterialProperties)
+
     bpy.types.INFO_MT_file_import.append(menu_func_import_dts)
     bpy.types.INFO_MT_file_import.append(menu_func_import_dsq)
     bpy.types.INFO_MT_file_export.append(menu_func_export_dts)
@@ -337,6 +391,8 @@ def register():
 
 def unregister():
     bpy.utils.unregister_module(__name__)
+
+    del bpy.types.Material.torque_props
 
     bpy.types.INFO_MT_file_import.remove(menu_func_import_dts)
     bpy.types.INFO_MT_file_import.remove(menu_func_import_dsq)

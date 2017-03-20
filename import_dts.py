@@ -69,26 +69,20 @@ def import_material(color_source, dmat, filepath):
         bmat.use_shadeless = True
     if dmat.flags & Material.Translucent:
         bmat.use_transparency = True
-
-    if dmat.flags & (Material.Additive | Material.Subtractive):
-        bmat["blendMode"] = "both"
-    elif dmat.flags & Material.Additive:
-        bmat["blendMode"] = "additive"
+    
+    if dmat.flags & Material.Additive:
+        bmat.torque_props.blend_mode = "ADDITIVE"
     elif dmat.flags & Material.Subtractive:
-        bmat["blendMode"] = "subtractive"
-    elif dmat.flags & Material.Translucent:
-        bmat["blendMode"] = "none"
+        bmat.torque_props.blend_mode = "SUBTRACTIVE"
+    else:
+        bmat.torque_props.blend_mode = "NONE"
 
-    if not (dmat.flags & Material.SWrap):
-        bmat["noSWrap"] = True
-    if not (dmat.flags & Material.TWrap):
-        bmat["noTWrap"] = True
-    if not (dmat.flags & Material.NeverEnvMap):
-        bmat["envMap"] = True
-    if not (dmat.flags & Material.NoMipMap):
-        bmat["mipMap"] = True
+    if dmat.flags & Material.SWrap:
+        bmat.torque_props.s_wrap = True
+    if dmat.flags & Material.TWrap:
+        bmat.torque_props.t_wraps = True
     if dmat.flags & Material.IFLMaterial:
-        bmat["ifl"] = True
+        bmat.torque_props.use_ifl = True
 
     # TODO: MipMapZeroBorder, IFLFrame, DetailMap, BumpMap, ReflectanceMap
     # AuxilaryMask?
@@ -194,11 +188,11 @@ def load(operator, context, filepath,
     # Now assign IFL material properties where needed
     for ifl in shape.iflmaterials:
         mat = materials[shape.materials[ifl.slot]]
-        assert mat["ifl"] == True
-        mat["iflName"] = shape.names[ifl.name]
-        mat["iflFirstFrame"] = ifl.firstFrame
-        mat["iflNumFrames"] = ifl.numFrames
-        mat["iflTime"] = ifl.time
+        assert mat.torque_props.use_ifl == True
+        mat.torque_props.ifl_name = shape.names[ifl.name]
+        mat.torque_props.ifl_first_frame = ifl.firstFrame
+        mat.torque_props.ifl_num_frames = ifl.numFrames
+        mat.torque_props.ifl_time = ifl.time
 
     # First load all the nodes into armatures
     lod_by_mesh = {}
