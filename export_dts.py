@@ -235,15 +235,24 @@ def save(operator, context, filepath,
 
         if name not in scene_objects:
             object = Object(shape.name(name), numMeshes=0, firstMesh=0, node=attach_node)
-            object_index = len(shape.objects)
+            object.has_transparency = False
             shape.objects.append(object)
-            shape.objectstates.append(ObjectState(1.0, 0, 0))
+            shape.objectstates.append(ObjectState(1.0, 0, 0)) # ff56g: search for a37hm
             scene_objects[name] = (object, {})
+        
+        for slot in bobj.material_slots:
+            if slot.material.use_transparency:
+                scene_objects[name][0].has_transparency = True
 
         if lod_name in scene_objects[name][1]:
             print("Warning: Multiple objects {} in LOD {}, ignoring...".format(name, lod_name))
         else:
             scene_objects[name][1][lod_name] = bobj
+    
+    # Put objects with transparent materials last
+    # Note: If this plugin ever needs to do anything with objectstates,
+    #       that needs to be handled properly. a37hm: earch for ff56g
+    shape.objects.sort(key=lambda object: object.has_transparency) # TODO: attrgetter
 
     # Sort detail levels
     shape.detail_levels.sort(key=attrgetter("size"), reverse=True)
