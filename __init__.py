@@ -137,7 +137,7 @@ class ExportDTS(bpy.types.Operator, ExportHelper):
     transform_mesh = BoolProperty(
             name="Use mesh transforms",
             description="Apply local location/rotation/scale to geometry",
-            default=False,
+            default=True,
             )
 
     apply_modifiers = BoolProperty(
