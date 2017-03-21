@@ -119,10 +119,25 @@ def save(operator, context, filepath,
     print("Exporting scene to DTS")
 
     scene = context.scene
+    active = context.active_object
     shape = DtsShape()
 
     blank_material_index = None
     auto_root_index = None
+    armature = None
+
+    if active and active.type == "ARMATURE":
+        armature = active
+    else:
+        for ob in scene.objects:
+            if ob.type == "ARMATURE" and not ob.parent and (not select_object or ob.select):
+                if armature:
+                    return fail(operator, "Multiple armatures present in scene, make one active to choose which to export")
+                armature = ob
+    
+    if armature:
+        return fail(operator, "Detected armature: {}".format(armature.name))
+    
     reference_frame = find_reference(context.scene)
 
     if reference_frame:
