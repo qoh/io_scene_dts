@@ -253,7 +253,8 @@ def save(operator, context, filepath,
                 attach_node = node_indices[node]
                 bone_mat = node.bone.matrix_local
                 # transform_mat = transform_mat * bone_mat.inverted()
-                # transform_mat = Matrix.Translation((0.2, 0, 0))
+                # Compensate for matrix_local pointing to tail, offset to head
+                transform_mat = Matrix.Translation((0, node.bone.length, 0)) * transform_mat
             else:
                 if bobj.parent not in node_lookup:
                     return fail(operator, "The mesh '{}' has a parent of type '{}' (named '{}'). You can only parent meshes to empties, not other meshes.".format(bobj.name, bobj.parent.type, bobj.parent.name))

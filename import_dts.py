@@ -223,8 +223,8 @@ def load(operator, context, filepath,
                 node.mat = shape.nodes[node.parent].mat * node.mat
             # node.head = node.mat.to_translation()
             # node.tail = node.head + Vector((0, 0, 0.25))
-            node.tail = node.mat.to_translation()
-            node.head = node.tail - Vector((0, 0, 0.25))
+            # node.tail = node.mat.to_translation()
+            # node.head = node.tail - Vector((0, 0, 0.25))
         
         bpy.ops.object.mode_set(mode="EDIT")
 
@@ -234,8 +234,10 @@ def load(operator, context, filepath,
         for i, node in enumerate(shape.nodes):
             bone = root_arm.edit_bones.new(shape.names[node.name])
             # bone.use_connect = True
-            bone.head = node.head
-            bone.tail = node.tail
+            # bone.head = node.head
+            # bone.tail = node.tail
+            bone.head = (0, 0, -0.25)
+            bone.tail = (0, 0, 0)
 
             if node.parent != -1:
                 bone.parent = edit_bone_table[node.parent]
