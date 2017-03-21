@@ -239,6 +239,7 @@ def load(operator, context, filepath,
                 bone.parent = edit_bone_table[node.parent]
             
             bone.matrix = node.mat
+            bone["nodeIndex"] = i
 
             edit_bone_table.append(bone)
             bone_names.append(bone.name)
