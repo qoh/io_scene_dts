@@ -68,6 +68,12 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
         default=True,
         )
     
+    use_armature = BoolProperty(
+        name="Skeleton as armature",
+        description="Import bones into an armature instead of empties",
+        default=False,
+        )
+    
     debug_report = BoolProperty(
         name="Write debug report",
         description="Dump out all the information from the DTS to a file",
