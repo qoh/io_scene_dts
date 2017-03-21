@@ -59,7 +59,7 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
     use_armature = BoolProperty(
         name="Skeleton as armature",
         description="Import bones into an armature instead of empties",
-        default=False,
+        default=True,
         )
     
     reference_keyframe = BoolProperty(
