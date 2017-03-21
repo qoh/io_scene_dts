@@ -221,8 +221,10 @@ def load(operator, context, filepath,
             node.mat = Matrix.Translation(shape.default_translations[i]) * node.mat.to_4x4()
             if node.parent != -1:
                 node.mat = shape.nodes[node.parent].mat * node.mat
-            node.head = node.mat.to_translation()
-            node.tail = node.head + Vector((0, 0, 0.25))
+            # node.head = node.mat.to_translation()
+            # node.tail = node.head + Vector((0, 0, 0.25))
+            node.tail = node.mat.to_translation()
+            node.head = node.tail - Vector((0, 0, 0.25))
         
         bpy.ops.object.mode_set(mode="EDIT")
 
