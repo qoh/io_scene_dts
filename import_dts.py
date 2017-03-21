@@ -226,6 +226,9 @@ def load(operator, context, filepath,
         ob.rotation_mode = "QUATERNION"
         ob.rotation_quaternion = shape.default_rotations[i]
 
+        if shape.names[node.name] == "__auto_root__" and ob.rotation_quaternion.magnitude == 0:
+            ob.rotation_quaternion = (1, 0, 0, 0)
+
         context.scene.objects.link(ob)
         node_obs.append(ob)
         node_obs_val[node] = ob
