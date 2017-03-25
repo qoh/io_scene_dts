@@ -9,6 +9,7 @@ def find_seqs(scene, select_marker):
             continue
 
         name, what = marker.name.rsplit(":", 1)
+        what = what.lower()
 
         if name not in sequences:
             sequences[name] = {}
