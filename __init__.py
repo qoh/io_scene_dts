@@ -55,12 +55,6 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
         default="*.dts",
         options={'HIDDEN'},
         )
-
-    use_armature = BoolProperty(
-        name="Skeleton as armature",
-        description="Import bones into an armature instead of empties",
-        default=True,
-        )
     
     reference_keyframe = BoolProperty(
         name="Reference keyframe",
@@ -72,6 +66,12 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
         name="Import sequences",
         description="Automatically add keyframes for embedded sequences",
         default=True,
+        )
+
+    use_armature = BoolProperty(
+        name="Experimental: Skeleton as armature",
+        description="Import bones into an armature instead of empties. Does not work with 'Import sequences'.",
+        default=False,
         )
     
     debug_report = BoolProperty(
@@ -164,6 +164,12 @@ class ExportDTS(bpy.types.Operator, ExportHelper):
         name="Apply modifiers",
         description="Apply modifiers to meshes",
         default=True,
+        )
+    
+    use_armature = BoolProperty(
+        name="Experimental: Skeleton from armature",
+        description="Export bones of an armature into the shape",
+        default=False,
         )
 
     debug_report = BoolProperty(

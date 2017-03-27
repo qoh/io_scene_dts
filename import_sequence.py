@@ -1,3 +1,5 @@
+# This file is currently unused
+
 import bpy
 
 def import_sequence(is_dsq, shape, seq):
