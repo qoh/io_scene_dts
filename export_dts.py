@@ -108,6 +108,24 @@ def export_all_nodes(lookup, shape, select_object, obs, parent=-1):
 
             export_all_nodes(lookup, shape, select_object, ob.children, node)
 
+def export_all_bones(lookup, bone_name_table, shape, bones, parent=-1):
+    for bone in bones:
+        node = Node(shape.name(bone.name), parent)
+        node.bone = bone
+        node.bl_ob = bone
+
+        mat = bone.matrix_local
+        if bone.parent:
+            mat = bone.parent.matrix_local.inverted() * mat
+    
+        node.translation = mat.to_translation()
+        node.rotation = mat.to_quaternion()
+
+        shape.nodes.append(node)
+        lookup[bone] = node
+        bone_name_table[bone.name] = node
+        export_all_bones(lookup, bone_name_table, shape, bone.children, node)
+
 def save(operator, context, filepath,
          select_object=False,
          select_marker=False,
@@ -115,23 +133,44 @@ def save(operator, context, filepath,
          generate_texture="disabled",
          apply_modifiers=True,
          transform_mesh=False,
+         use_armature=False,
          debug_report=False):
     print("Exporting scene to DTS")
 
     scene = context.scene
+    active = context.active_object
     shape = DtsShape()
 
     blank_material_index = None
     auto_root_index = None
-    reference_frame = find_reference(context.scene)
+    armature = None
 
-    if reference_frame:
-        print("Note: Seeking to reference frame at", reference_frame)
-        scene.frame_set(reference_frame)
+    if use_armature:
+        if active and active.type == "ARMATURE":
+            armature = active
+        else:
+            for ob in scene.objects:
+                if ob.type == "ARMATURE" and not ob.parent and (not select_object or ob.select):
+                    if armature:
+                        return fail(operator, "Multiple armatures present in scene, make one active to choose which to export")
+                    armature = ob
+    
+    if armature:
+        print("Note: Using armature '{}'".format(armature.name))
+        node_lookup = {}
+        bone_name_table = {}
+        export_all_bones(node_lookup, bone_name_table,
+            shape, filter(lambda o: not o.parent, armature.data.bones))
+    else:
+        reference_frame = find_reference(context.scene)
 
-    # Create a DTS node for every armature/empty in the scene
-    node_lookup = {}
-    export_all_nodes(node_lookup, shape, select_object, filter(lambda o: not o.parent, scene.objects))
+        if reference_frame:
+            print("Note: Seeking to reference frame at", reference_frame)
+            scene.frame_set(reference_frame)
+
+        # Create a DTS node for every armature/empty in the scene
+        node_lookup = {}
+        export_all_nodes(node_lookup, shape, select_object, filter(lambda o: not o.parent, scene.objects))
 
     # NodeOrder backwards compatibility
     if "NodeOrder" in bpy.data.texts:
@@ -155,12 +194,14 @@ def save(operator, context, filepath,
         shape.default_rotations.append(node.rotation)
 
     node_lookup = {ob: node_indices[node] for ob, node in node_lookup.items()}
-    animated_nodes = []
 
-    for node in shape.nodes:
-        data = node.bl_ob.animation_data
-        if data and data.action and len(data.action.fcurves):
-            animated_nodes.append(node.bl_ob)
+    if not armature:
+        animated_nodes = []
+
+        for node in shape.nodes:
+            data = node.bl_ob.animation_data
+            if data and data.action and len(data.action.fcurves):
+                animated_nodes.append(node.bl_ob)
 
     # Now that we have all the nodes, attach our fabled objects to them
     scene_lods = {}
@@ -198,15 +239,32 @@ def save(operator, context, filepath,
 
         if lod_name == "__ignore__":
             continue
+        
+        transform_mat = bobj.matrix_local
 
         if bobj.parent:
-            if bobj.parent not in node_lookup:
-                return fail(operator, "The mesh '{}' has a parent of type '{}' (named '{}'). You can only parent meshes to empties, not other meshes.".format(bobj.name, bobj.parent.type, bobj.parent.name))
-            
-            if node_lookup[bobj.parent] is False: # not selected
-                continue
+            if armature:
+                if bobj.parent != armature:
+                    continue
+                if bobj.parent_type != "BONE":
+                    s = "Mesh '{}' is parented to '{}' using {}-parenting, but only BONE-parenting is supported"
+                    return fail(operator, s.format(bobj.name, armature.name, bobj.parent_type))
+                node = bone_name_table.get(bobj.parent_bone)
+                if not node:
+                    print("Warning: Mesh '{}' has unknown parent_bone '{}', skipping".format(bobj.name, bobj.parent_bone))
+                attach_node = node_indices[node]
+                bone_mat = node.bone.matrix_local
+                # transform_mat = transform_mat * bone_mat.inverted()
+                # Compensate for matrix_local pointing to tail, offset to head
+                transform_mat = Matrix.Translation((0, node.bone.length, 0)) * transform_mat
+            else:
+                if bobj.parent not in node_lookup:
+                    return fail(operator, "The mesh '{}' has a parent of type '{}' (named '{}'). You can only parent meshes to empties, not other meshes.".format(bobj.name, bobj.parent.type, bobj.parent.name))
+                
+                if node_lookup[bobj.parent] is False: # not selected
+                    continue
 
-            attach_node = node_lookup[bobj.parent]
+                attach_node = node_lookup[bobj.parent]
         else:
             print("Warning: Mesh '{}' has no parent".format(bobj.name))
 
@@ -217,6 +275,9 @@ def save(operator, context, filepath,
                 shape.default_translations.append(Vector())
 
             attach_node = auto_root_index
+        
+        if not transform_mesh:
+            transform_mat = Matrix.Identity(4)
 
         lod_name_index, lod_name = shape.name_resolve(lod_name)
 
@@ -247,7 +308,7 @@ def save(operator, context, filepath,
         if lod_name in scene_objects[name][1]:
             print("Warning: Multiple objects {} in LOD {}, ignoring...".format(name, lod_name))
         else:
-            scene_objects[name][1][lod_name] = bobj
+            scene_objects[name][1][lod_name] = (bobj, transform_mat)
     
     # Put objects with transparent materials last
     # Note: If this plugin ever needs to do anything with objectstates,
@@ -284,7 +345,7 @@ def save(operator, context, filepath,
 
             if lod_name in lods:
                 print("Exporting mesh '{}' (LOD '{}')".format(shape.names[object.name], lod_name))
-                bobj = lods[lod_name]
+                bobj, transform_mat = lods[lod_name]
 
                 #########################
                 ### Welcome to complexity
@@ -358,12 +419,8 @@ def save(operator, context, filepath,
                             else:
                                 normal = vert.normal
 
-                            if transform_mesh:
-                                dmesh.verts.append(transform_co(bobj, vert.co))
-                                dmesh.normals.append(transform_normal(bobj, normal))
-                            else:
-                                dmesh.verts.append(vert.co.copy())
-                                dmesh.normals.append(normal.copy())
+                            dmesh.verts.append(transform_mat * vert.co)
+                            dmesh.normals.append((transform_mat.to_3x3() * normal).normalized())
 
                             dmesh.enormals.append(0)
 
@@ -439,8 +496,12 @@ def save(operator, context, filepath,
         (shape.bounds.min.x + shape.bounds.max.x) / 2,
         (shape.bounds.min.y + shape.bounds.max.y) / 2,
         (shape.bounds.min.z + shape.bounds.max.z) / 2))
-    
-    sequences, sequence_flags = find_seqs(context.scene, select_marker)
+
+    if armature:
+        sequences = {}
+        sequence_flags = {}
+    else:
+        sequences, sequence_flags = find_seqs(context.scene, select_marker)
 
     for name, markers in sequences.items():
         print("Exporting sequence", name)

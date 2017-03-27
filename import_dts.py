@@ -164,9 +164,13 @@ def create_bmesh(dmesh, materials, shape):
 
     return me
 
+def file_base_name(filepath):
+    return os.path.basename(filepath).rsplit(".", 1)[0]
+
 def load(operator, context, filepath,
          reference_keyframe=True,
          import_sequences=True,
+         use_armature=False,
          debug_report=False):
     shape = DtsShape()
 
@@ -177,7 +181,7 @@ def load(operator, context, filepath,
         write_debug_report(filepath + ".txt", shape)
         with open(filepath + ".pass.dts", "wb") as fd:
             shape.save(fd)
-
+    
     # Create a Blender material for each DTS material
     materials = {}
     color_source = get_rgb_colors()
@@ -203,57 +207,100 @@ def load(operator, context, filepath,
     node_obs = []
     node_obs_val = {}
 
-    if reference_keyframe:
-        reference_marker = context.scene.timeline_markers.get("reference")
-        if reference_marker is None:
-            reference_frame = 0
-            context.scene.timeline_markers.new("reference", reference_frame)
-        else:
-            reference_frame = reference_marker.frame
+    if use_armature:
+        root_arm = bpy.data.armatures.new(file_base_name(filepath))
+        root_ob = bpy.data.objects.new(root_arm.name, root_arm)
+        root_ob.show_x_ray = True
+
+        context.scene.objects.link(root_ob)
+        context.scene.objects.active = root_ob
+
+        # Calculate armature-space matrix, head and tail for each node
+        for i, node in enumerate(shape.nodes):
+            node.mat = shape.default_rotations[i].to_matrix()
+            node.mat = Matrix.Translation(shape.default_translations[i]) * node.mat.to_4x4()
+            if node.parent != -1:
+                node.mat = shape.nodes[node.parent].mat * node.mat
+            # node.head = node.mat.to_translation()
+            # node.tail = node.head + Vector((0, 0, 0.25))
+            # node.tail = node.mat.to_translation()
+            # node.head = node.tail - Vector((0, 0, 0.25))
+        
+        bpy.ops.object.mode_set(mode="EDIT")
+
+        edit_bone_table = []
+        bone_names = []
+
+        for i, node in enumerate(shape.nodes):
+            bone = root_arm.edit_bones.new(shape.names[node.name])
+            # bone.use_connect = True
+            # bone.head = node.head
+            # bone.tail = node.tail
+            bone.head = (0, 0, -0.25)
+            bone.tail = (0, 0, 0)
+
+            if node.parent != -1:
+                bone.parent = edit_bone_table[node.parent]
+            
+            bone.matrix = node.mat
+            bone["nodeIndex"] = i
+
+            edit_bone_table.append(bone)
+            bone_names.append(bone.name)
+        
+        bpy.ops.object.mode_set(mode="OBJECT")
     else:
-        reference_frame = None
-
-    for i, node in enumerate(shape.nodes):
-        ob = bpy.data.objects.new(dedup_name(bpy.data.objects, shape.names[node.name]), None)
-        ob["nodeIndex"] = i
-        ob.empty_draw_type = "SINGLE_ARROW"
-        ob.empty_draw_size = 0.5
-
-        if node.parent != -1:
-            ob.parent = node_obs[node.parent]
-
-        ob.location = shape.default_translations[i]
-        ob.rotation_mode = "QUATERNION"
-        ob.rotation_quaternion = shape.default_rotations[i]
-
-        if shape.names[node.name] == "__auto_root__" and ob.rotation_quaternion.magnitude == 0:
-            ob.rotation_quaternion = (1, 0, 0, 0)
-
-        context.scene.objects.link(ob)
-        node_obs.append(ob)
-        node_obs_val[node] = ob
-
         if reference_keyframe:
-            curves = ob_location_curves(ob)
-            for curve in curves:
-                curve.keyframe_points.add(1)
-                key = curve.keyframe_points[-1]
-                key.interpolation = "LINEAR"
-                key.co = (reference_frame, ob.location[curve.array_index])
-            
-            curves = ob_scale_curves(ob)
-            for curve in curves:
-                curve.keyframe_points.add(1)
-                key = curve.keyframe_points[-1]
-                key.interpolation = "LINEAR"
-                key.co = (reference_frame, ob.scale[curve.array_index])
-            
-            _, curves = ob_rotation_curves(ob)
-            for curve in curves:
-                curve.keyframe_points.add(1)
-                key = curve.keyframe_points[-1]
-                key.interpolation = "LINEAR"
-                key.co = (reference_frame, ob.rotation_quaternion[curve.array_index])
+            reference_marker = context.scene.timeline_markers.get("reference")
+            if reference_marker is None:
+                reference_frame = 0
+                context.scene.timeline_markers.new("reference", reference_frame)
+            else:
+                reference_frame = reference_marker.frame
+        else:
+            reference_frame = None
+        
+        # Create an empty for every node
+        for i, node in enumerate(shape.nodes):
+            ob = bpy.data.objects.new(dedup_name(bpy.data.objects, shape.names[node.name]), None)
+            ob["nodeIndex"] = i
+            ob.empty_draw_type = "SINGLE_ARROW"
+            ob.empty_draw_size = 0.5
+
+            if node.parent != -1:
+                ob.parent = node_obs[node.parent]
+
+            ob.location = shape.default_translations[i]
+            ob.rotation_mode = "QUATERNION"
+            ob.rotation_quaternion = shape.default_rotations[i]
+            if shape.names[node.name] == "__auto_root__" and ob.rotation_quaternion.magnitude == 0:
+                ob.rotation_quaternion = (1, 0, 0, 0)
+
+            context.scene.objects.link(ob)
+            node_obs.append(ob)
+            node_obs_val[node] = ob
+
+            if reference_keyframe:
+                curves = ob_location_curves(ob)
+                for curve in curves:
+                    curve.keyframe_points.add(1)
+                    key = curve.keyframe_points[-1]
+                    key.interpolation = "LINEAR"
+                    key.co = (reference_frame, ob.location[curve.array_index])
+                
+                curves = ob_scale_curves(ob)
+                for curve in curves:
+                    curve.keyframe_points.add(1)
+                    key = curve.keyframe_points[-1]
+                    key.interpolation = "LINEAR"
+                    key.co = (reference_frame, ob.scale[curve.array_index])
+                
+                _, curves = ob_rotation_curves(ob)
+                for curve in curves:
+                    curve.keyframe_points.add(1)
+                    key = curve.keyframe_points[-1]
+                    key.interpolation = "LINEAR"
+                    key.co = (reference_frame, ob.rotation_quaternion[curve.array_index])
     
     # Try animation?
     if import_sequences:
@@ -383,7 +430,13 @@ def load(operator, context, filepath,
             context.scene.objects.link(bobj)
 
             if obj.node != -1:
-                bobj.parent = node_obs[obj.node]
+                if use_armature:
+                    bobj.parent = root_ob
+                    bobj.parent_bone = bone_names[obj.node]
+                    bobj.parent_type = "BONE"
+                    bobj.matrix_world = shape.nodes[obj.node].mat
+                else:
+                    bobj.parent = node_obs[obj.node]
 
             lod_name = shape.names[lod_by_mesh[meshIndex].name]
 
