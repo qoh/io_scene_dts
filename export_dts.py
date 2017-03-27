@@ -133,6 +133,7 @@ def save(operator, context, filepath,
          generate_texture="disabled",
          apply_modifiers=True,
          transform_mesh=False,
+         use_armature=False,
          debug_report=False):
     print("Exporting scene to DTS")
 
@@ -144,14 +145,15 @@ def save(operator, context, filepath,
     auto_root_index = None
     armature = None
 
-    if active and active.type == "ARMATURE":
-        armature = active
-    else:
-        for ob in scene.objects:
-            if ob.type == "ARMATURE" and not ob.parent and (not select_object or ob.select):
-                if armature:
-                    return fail(operator, "Multiple armatures present in scene, make one active to choose which to export")
-                armature = ob
+    if use_armature:
+        if active and active.type == "ARMATURE":
+            armature = active
+        else:
+            for ob in scene.objects:
+                if ob.type == "ARMATURE" and not ob.parent and (not select_object or ob.select):
+                    if armature:
+                        return fail(operator, "Multiple armatures present in scene, make one active to choose which to export")
+                    armature = ob
     
     if armature:
         print("Note: Using armature '{}'".format(armature.name))
@@ -494,8 +496,12 @@ def save(operator, context, filepath,
         (shape.bounds.min.x + shape.bounds.max.x) / 2,
         (shape.bounds.min.y + shape.bounds.max.y) / 2,
         (shape.bounds.min.z + shape.bounds.max.z) / 2))
-    
-    sequences, sequence_flags = find_seqs(context.scene, select_marker)
+
+    if armature:
+        sequences = {}
+        sequence_flags = {}
+    else:
+        sequences, sequence_flags = find_seqs(context.scene, select_marker)
 
     for name, markers in sequences.items():
         print("Exporting sequence", name)
