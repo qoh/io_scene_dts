@@ -585,8 +585,8 @@ def save(operator, context, filepath,
                 curves_rotation = array_from_fcurves(fcurves, "rotation_quaternion", 4)
             elif ob.rotation_mode == "XYZ":
                 curves_rotation = array_from_fcurves(fcurves, "rotation_euler", 3)
-            else:
-                return fail(operator, "Animated node '{}' uses unsupported rotation_mode '{}'".format(ob.name, ob.rotation_mode))
+            else: # TODO: Add all the other modes
+                curves_rotation = None
 
             curves_translation = array_from_fcurves(fcurves, "location", 3)
             curves_scale = array_from_fcurves(fcurves, "scale", 3)
@@ -609,15 +609,15 @@ def save(operator, context, filepath,
                 if seq.translationMatters[index]:
                     if seq.flags & Sequence.Blend:
                         translation -= base_translation
-                    shape.node_translations.append(translation)
+                    dsq.translations.append(translation)
 
                 if seq.rotationMatters[index]:
                     if seq.flags & Sequence.Blend:
                         rotation = base_rotation.inverted() * rotation
-                    shape.node_rotations.append(rotation)
+                    dsq.rotations.append(rotation)
 
                 if seq.scaleMatters[index]:
-                    shape.node_aligned_scales.append(scale)
+                    dsq.aligned_scales.append(scale)
 
     if debug_report:
         print("Writing debug report")

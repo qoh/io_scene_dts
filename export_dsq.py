@@ -6,7 +6,7 @@ from itertools import groupby
 from .DsqFile import DsqFile
 from .DtsTypes import *
 from .util import fail, evaluate_all, find_reference, array_from_fcurves, \
-    fcurves_keyframe_in_range
+    fcurves_keyframe_in_range, find_reference
 from .shared_export import find_seqs
 
 def save(operator, context, filepath,
@@ -20,11 +20,20 @@ def save(operator, context, filepath,
     # Find all the sequences to export
     sequences, sequence_flags = find_seqs(context.scene, select_marker)
 
+    # Seek to reference frame if present before reading nodes
+    reference_frame = find_reference(scene)
+
+    if reference_frame is not None:
+        print("Note: Seeking to reference frame at", reference_frame)
+        scene.frame_set(reference_frame)
+
     # Create a DTS node for every armature/empty in the scene
     node_ob = {}
+    node_transform = {}
 
     def traverse_node(node):
         node_ob[node.name] = node
+        node_transform[node] = node.matrix_local.decompose()
         dsq.nodes.append(node.name)
 
         for child in node.children:
@@ -34,7 +43,7 @@ def save(operator, context, filepath,
     for ob in scene.objects:
         if ob.type == "EMPTY" and not ob.parent:
             traverse_node(ob)
-    
+
     reference_frame = find_reference(context.scene)
 
     # NodeOrder backwards compatibility
@@ -126,69 +135,61 @@ def save(operator, context, filepath,
 
         dsq.sequences.append(seq)
 
-        seq_curves_rotation = []
-        seq_curves_translation = []
-        seq_curves_scale = []
+        frame_indices = list(range(frame_start, frame_end + 1))
+
+        # Store all animation data so we don't need to frame_set all over the place
+        animation_data = {frame: {} for frame in frame_indices}
+
+        for frame in frame_indices:
+            scene.frame_set(frame)
+
+            for ob in animated_nodes:
+                animation_data[frame][ob] = ob.matrix_local.decompose()
 
         for ob in animated_nodes:
             index = node_index[ob]
+
+            base_translation, base_rotation, base_scale = node_transform[ob]
+
             fcurves = ob.animation_data.action.fcurves
 
             if ob.rotation_mode == "QUATERNION":
                 curves_rotation = array_from_fcurves(fcurves, "rotation_quaternion", 4)
             elif ob.rotation_mode == "XYZ":
                 curves_rotation = array_from_fcurves(fcurves, "rotation_euler", 3)
-            else:
-                return fail(operator, "Animated node '{}' uses unsupported rotation_mode '{}'".format(ob.name, ob.rotation_mode))
+            else: # TODO: Add all the other modes
+                curves_rotation = None
 
             curves_translation = array_from_fcurves(fcurves, "location", 3)
             curves_scale = array_from_fcurves(fcurves, "scale", 3)
 
+            # Decide what matters by presence of f-curves
             if curves_rotation and fcurves_keyframe_in_range(curves_rotation, frame_start, frame_end):
-                print("rotation matters for", ob.name)
-                seq_curves_rotation.append((curves_rotation, ob.rotation_mode))
                 seq.rotationMatters[index] = True
 
             if curves_translation and fcurves_keyframe_in_range(curves_translation, frame_start, frame_end):
-                print("translation matters for", ob.name)
-                seq_curves_translation.append(curves_translation)
                 seq.translationMatters[index] = True
 
             if curves_scale and fcurves_keyframe_in_range(curves_scale, frame_start, frame_end):
-                print("scale matters for", ob.name)
-                seq_curves_scale.append(curves_scale)
                 seq.scaleMatters[index] = True
 
-        frame_indices = list(range(frame_start, frame_end + 1))
-
-        for (curves, mode) in seq_curves_rotation:
+            # Write the data where it matters
+            # This assumes that animated_nodes is in the same order as shape.nodes
             for frame in frame_indices:
-                if mode == "QUATERNION":
-                    r = Quaternion(evaluate_all(curves, frame))
-                elif mode == "XYZ":
-                    r = Euler(evaluate_all(curves, frame), "XYZ").to_quaternion()
-                else:
-                    assert false, "unknown rotation_mode after finding matters"
-                if seq.flags & Sequence.Blend:
-                    if reference_frame is None:
-                        return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
-                    ref_r = Quaternion(evaluate_all(curves, reference_frame))
-                    r = ref_r.inverted() * r
-                dsq.rotations.append(r)
+                translation, rotation, scale = animation_data[frame][ob]
 
-        for curves in seq_curves_translation:
-            for frame in frame_indices:
-                v = Vector(evaluate_all(curves, frame))
-                if seq.flags & Sequence.Blend:
-                    if reference_frame is None:
-                        return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
-                    ref_v = Vector(evaluate_all(curves, reference_frame))
-                    v -= ref_v
-                dsq.translations.append(v)
+                if seq.translationMatters[index]:
+                    if seq.flags & Sequence.Blend:
+                        translation -= base_translation
+                    dsq.translations.append(translation)
 
-        for curves in seq_curves_scale:
-            for frame in frame_indices:
-                dsq.aligned_scales.append(Vector(evaluate_all(curves, frame)))
+                if seq.rotationMatters[index]:
+                    if seq.flags & Sequence.Blend:
+                        rotation = base_rotation.inverted() * rotation
+                    dsq.rotations.append(rotation)
+
+                if seq.scaleMatters[index]:
+                    dsq.aligned_scales.append(scale)
 
     with open(filepath, "wb") as fd:
         dsq.write(fd)
