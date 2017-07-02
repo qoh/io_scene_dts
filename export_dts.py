@@ -50,7 +50,7 @@ def export_material(mat, shape):
         flags |= Material.TWrap
     flags |= Material.NeverEnvMap
     flags |= Material.NoMipMap
-    
+
     if mat.torque_props.use_ifl:
         flags |= Material.IFLMaterial
 
@@ -88,7 +88,7 @@ def export_all_nodes(lookup, shape, select_object, obs, parent=-1):
             if select_object and not ob.select:
                 lookup[ob] = False
                 continue
-            
+
             loc, rot, scale = ob.matrix_local.decompose()
 
             if not seq_float_eq((1, 1, 1), scale):
@@ -117,7 +117,7 @@ def export_all_bones(lookup, bone_name_table, shape, bones, parent=-1):
         mat = bone.matrix_local
         if bone.parent:
             mat = bone.parent.matrix_local.inverted() * mat
-    
+
         node.translation = mat.to_translation()
         node.rotation = mat.to_quaternion()
 
@@ -154,7 +154,7 @@ def save(operator, context, filepath,
                     if armature:
                         return fail(operator, "Multiple armatures present in scene, make one active to choose which to export")
                     armature = ob
-    
+
     if armature:
         print("Note: Using armature '{}'".format(armature.name))
         node_lookup = {}
@@ -212,7 +212,7 @@ def save(operator, context, filepath,
     for bobj in scene.objects:
         if bobj.type != "MESH":
             continue
-        
+
         if select_object and not bobj.select:
             continue
 
@@ -239,7 +239,7 @@ def save(operator, context, filepath,
 
         if lod_name == "__ignore__":
             continue
-        
+
         transform_mat = bobj.matrix_local
 
         if bobj.parent:
@@ -260,7 +260,7 @@ def save(operator, context, filepath,
             else:
                 if bobj.parent not in node_lookup:
                     return fail(operator, "The mesh '{}' has a parent of type '{}' (named '{}'). You can only parent meshes to empties, not other meshes.".format(bobj.name, bobj.parent.type, bobj.parent.name))
-                
+
                 if node_lookup[bobj.parent] is False: # not selected
                     continue
 
@@ -275,7 +275,7 @@ def save(operator, context, filepath,
                 shape.default_translations.append(Vector())
 
             attach_node = auto_root_index
-        
+
         if not transform_mesh:
             transform_mat = Matrix.Identity(4)
 
@@ -300,7 +300,7 @@ def save(operator, context, filepath,
             shape.objects.append(object)
             shape.objectstates.append(ObjectState(1.0, 0, 0)) # ff56g: search for a37hm
             scene_objects[name] = (object, {})
-        
+
         for slot in bobj.material_slots:
             if slot.material.use_transparency:
                 scene_objects[name][0].has_transparency = True
@@ -309,7 +309,7 @@ def save(operator, context, filepath,
             print("Warning: Multiple objects {} in LOD {}, ignoring...".format(name, lod_name))
         else:
             scene_objects[name][1][lod_name] = (bobj, transform_mat)
-    
+
     # Put objects with transparent materials last
     # Note: If this plugin ever needs to do anything with objectstates,
     #       that needs to be handled properly. a37hm: earch for ff56g
@@ -558,69 +558,53 @@ def save(operator, context, filepath,
 
         shape.sequences.append(seq)
 
-        seq_curves_rotation = []
-        seq_curves_translation = []
-        seq_curves_scale = []
+        frame_indices = list(range(frame_start, frame_end + 1))
+
+        # Store all animation data so we don't need to frame_set all over the place
+        animation_data = {frame: {} for frame in frame_indices}
+
+        for frame in frame_indices:
+            scene.frame_set(frame)
+
+            for ob in animated_nodes:
+                animation_data[frame][ob] = ob.matrix_local.decompose()
 
         for ob in animated_nodes:
             index = node_lookup[ob]
-            fcurves = ob.animation_data.action.fcurves
+            node = shape.nodes[index]
 
-            if ob.rotation_mode == "QUATERNION":
-                curves_rotation = array_from_fcurves(fcurves, "rotation_quaternion", 4)
-            elif ob.rotation_mode == "XYZ":
-                curves_rotation = array_from_fcurves(fcurves, "rotation_euler", 3)
-            else:
-                return fail(operator, "Animated node '{}' uses unsupported rotation_mode '{}'".format(ob.name, ob.rotation_mode))
+            base_translation = node.translation
+            base_rotation = node.rotation
+            base_scale = Vector((1.0, 1.0, 1.0))
 
-            curves_translation = array_from_fcurves(fcurves, "location", 3)
-            curves_scale = array_from_fcurves(fcurves, "scale", 3)
-
-            if curves_rotation and fcurves_keyframe_in_range(curves_rotation, frame_start, frame_end):
-                print("rotation matters for", ob.name)
-                seq_curves_rotation.append((curves_rotation, ob.rotation_mode))
-                seq.rotationMatters[index] = True
-
-            if curves_translation and fcurves_keyframe_in_range(curves_translation, frame_start, frame_end):
-                print("translation matters for", ob.name)
-                seq_curves_translation.append(curves_translation)
-                seq.translationMatters[index] = True
-
-            if curves_scale and fcurves_keyframe_in_range(curves_scale, frame_start, frame_end):
-                print("scale matters for", ob.name)
-                seq_curves_scale.append(curves_scale)
-                seq.scaleMatters[index] = True
-
-        frame_indices = list(range(frame_start, frame_end + 1))
-
-        for (curves, mode) in seq_curves_rotation:
+            # Check what matters first by seeing if the data differs on any frame
             for frame in frame_indices:
-                if mode == "QUATERNION":
-                    r = Quaternion(evaluate_all(curves, frame))
-                elif mode == "XYZ":
-                    r = Euler(evaluate_all(curves, frame), "XYZ").to_quaternion()
-                else:
-                    assert false, "unknown rotation_mode after finding matters"
-                if seq.flags & Sequence.Blend:
-                    if reference_frame is None:
-                        return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
-                    ref_r = Quaternion(evaluate_all(curves, reference_frame))
-                    r = ref_r.inverted() * r
-                shape.node_rotations.append(r)
+                translation, rotation, scale = animation_data[frame][ob]
 
-        for curves in seq_curves_translation:
-            for frame in frame_indices:
-                v = Vector(evaluate_all(curves, frame))
-                if seq.flags & Sequence.Blend:
-                    if reference_frame is None:
-                        return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
-                    ref_v = Vector(evaluate_all(curves, reference_frame))
-                    v -= ref_v
-                shape.node_translations.append(v)
+                if base_translation != translation:
+                    seq.translationMatters[index] = True
+                if base_rotation != rotation:
+                    seq.rotationMatters[index] = True
+                if base_scale != scale:
+                    seq.scaleMatters[index] = True
 
-        for curves in seq_curves_scale:
+            # Write the data where it matters
+            # This assumes that animated_nodes is in the same order as shape.nodes
             for frame in frame_indices:
-                shape.node_aligned_scales.append(Vector(evaluate_all(curves, frame)))
+                translation, rotation, scale = animation_data[frame][ob]
+
+                if seq.translationMatters[index]:
+                    if seq.flags & Sequence.Blend:
+                        translation -= base_translation
+                    shape.node_translations.append(translation)
+
+                if seq.rotationMatters[index]:
+                    if seq.flags & Sequence.Blend:
+                        rotation = base_rotation.inverted() * rotation
+                    shape.node_rotations.append(rotation)
+
+                if seq.scaleMatters[index]:
+                    shape.node_aligned_scales.append(scale)
 
     if debug_report:
         print("Writing debug report")
