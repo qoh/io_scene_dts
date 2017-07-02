@@ -585,8 +585,8 @@ def save(operator, context, filepath,
                 curves_rotation = array_from_fcurves(fcurves, "rotation_quaternion", 4)
             elif ob.rotation_mode == "XYZ":
                 curves_rotation = array_from_fcurves(fcurves, "rotation_euler", 3)
-            else:
-                return fail(operator, "Animated node '{}' uses unsupported rotation_mode '{}'".format(ob.name, ob.rotation_mode))
+            else: # TODO: Add all the other modes
+                curves_rotation = None
 
             curves_translation = array_from_fcurves(fcurves, "location", 3)
             curves_scale = array_from_fcurves(fcurves, "scale", 3)
