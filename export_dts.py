@@ -162,9 +162,9 @@ def save(operator, context, filepath,
         export_all_bones(node_lookup, bone_name_table,
             shape, filter(lambda o: not o.parent, armature.data.bones))
     else:
-        reference_frame = find_reference(context.scene)
+        reference_frame = find_reference(scene)
 
-        if reference_frame:
+        if reference_frame is not None:
             print("Note: Seeking to reference frame at", reference_frame)
             scene.frame_set(reference_frame)
 
