@@ -409,7 +409,7 @@ def load(operator, context, filepath,
                             vec[curve.array_index])
 
             # Insert a reference frame immediately before the animation
-            insert_reference(globalToolIndex - 2, shape.nodes)
+            # insert_reference(globalToolIndex - 2, shape.nodes)
 
             context.scene.timeline_markers.new(name + ":start", globalToolIndex)
             context.scene.timeline_markers.new(name + ":end", globalToolIndex + seq.numKeyframes * step - 1)

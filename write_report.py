@@ -14,6 +14,8 @@ def write_debug_report(filepath, shape):
                 else:
                     return str(i)
             return ", ".join(map(each, range(first, first + count)))
+        def show_matters(matters):
+            return ' '.join(map(lambda p: gn(p[0].name), filter(lambda p: p[1], zip(shape.nodes, matters))))
 
         p("smallest_size = " + str(shape.smallest_size))
         p("smallest_detail_level = " + str(shape.smallest_detail_level))
@@ -165,14 +167,14 @@ def write_debug_report(filepath, shape):
             p("    firstTrigger: " + str(seq.firstTrigger))
             p("    numTriggers: " + str(seq.numTriggers))
             p("    toolBegin: " + str(seq.toolBegin))
-            p("    rotationMatters: " + str(seq.rotationMatters))
-            p("    translationMatters: " + str(seq.translationMatters))
-            p("    scaleMatters: " + str(seq.scaleMatters))
-            p("    decalMatters: " + str(seq.decalMatters))
-            p("    iflMatters: " + str(seq.iflMatters))
-            p("    visMatters: " + str(seq.visMatters))
-            p("    frameMatters: " + str(seq.frameMatters))
-            p("    matFrameMatters: " + str(seq.matFrameMatters))
+            p("    rotationMatters: " + show_matters(seq.rotationMatters))
+            p("    translationMatters: " + show_matters(seq.translationMatters))
+            p("    scaleMatters: " + show_matters(seq.scaleMatters))
+            p("    decalMatters: " + show_matters(seq.decalMatters))
+            p("    iflMatters: " + show_matters(seq.iflMatters))
+            p("    visMatters: " + show_matters(seq.visMatters))
+            p("    frameMatters: " + show_matters(seq.frameMatters))
+            p("    matFrameMatters: " + show_matters(seq.matFrameMatters))
 
         p("Names (" + str(len(shape.names)) + "):")
         for i, name in enumerate(shape.names):
