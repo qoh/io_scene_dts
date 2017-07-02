@@ -329,6 +329,8 @@ def load(operator, context, filepath,
             if seq.flags & Sequence.Blend:
                 flags.append("blend")
 
+            flags.append("duration {}".format(seq.duration))
+
             if flags:
                 sequences_text.append(name + ": " + ", ".join(flags))
 

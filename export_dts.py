@@ -512,14 +512,14 @@ def save(operator, context, filepath,
         if "end" not in markers:
             return fail(operator, "Missing end marker for sequence '{}'".format(name))
 
+        frame_start = markers["start"].frame
+        frame_end = markers["end"].frame
+        frame_range = frame_end - frame_start + 1
+
         seq = Sequence()
         seq.nameIndex = shape.name(name)
         seq.flags = Sequence.AlignedScale
         seq.priority = 1
-
-        frame_start = markers["start"].frame
-        frame_end = markers["end"].frame
-        frame_range = frame_end - frame_start + 1
 
         seq.toolBegin = frame_start
         seq.duration = frame_range * (context.scene.render.fps_base / context.scene.render.fps)
@@ -609,15 +609,15 @@ def save(operator, context, filepath,
                 if seq.translationMatters[index]:
                     if seq.flags & Sequence.Blend:
                         translation -= base_translation
-                    dsq.translations.append(translation)
+                    shape.node_translations.append(translation)
 
                 if seq.rotationMatters[index]:
                     if seq.flags & Sequence.Blend:
                         rotation = base_rotation.inverted() * rotation
-                    dsq.rotations.append(rotation)
+                    shape.node_rotations.append(rotation)
 
                 if seq.scaleMatters[index]:
-                    dsq.aligned_scales.append(scale)
+                    shape.node_aligned_scales.append(scale)
 
     if debug_report:
         print("Writing debug report")

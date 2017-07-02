@@ -30,7 +30,7 @@ def load(operator, context, filepath,
 
   with open(filepath, "rb") as fd:
     dsq.read(fd)
-  
+
   if debug_report:
       with open(filepath + ".txt", "w") as fd:
         dsq.write_dump(fd)
@@ -110,6 +110,8 @@ def load(operator, context, filepath,
     if seq.flags & Sequence.Blend:
       flags.append("blend")
 
+    flags.append("duration {}".format(seq.duration))
+
     if flags:
       sequences_text.append(name + ": " + ", ".join(flags))
 
@@ -172,7 +174,7 @@ def load(operator, context, filepath,
         else:
           print("Warning: Invalid scale flags found in sequence")
           break
-        
+
         for curve in curves:
           curve.keyframe_points.add(1)
           key = curve.keyframe_points[-1]
