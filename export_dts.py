@@ -577,16 +577,27 @@ def save(operator, context, filepath,
             base_rotation = node.rotation
             base_scale = Vector((1.0, 1.0, 1.0))
 
-            # Check what matters first by seeing if the data differs on any frame
-            for frame in frame_indices:
-                translation, rotation, scale = animation_data[frame][ob]
+            fcurves = ob.animation_data.action.fcurves
 
-                if base_translation != translation:
-                    seq.translationMatters[index] = True
-                if base_rotation != rotation:
-                    seq.rotationMatters[index] = True
-                if base_scale != scale:
-                    seq.scaleMatters[index] = True
+            if ob.rotation_mode == "QUATERNION":
+                curves_rotation = array_from_fcurves(fcurves, "rotation_quaternion", 4)
+            elif ob.rotation_mode == "XYZ":
+                curves_rotation = array_from_fcurves(fcurves, "rotation_euler", 3)
+            else:
+                return fail(operator, "Animated node '{}' uses unsupported rotation_mode '{}'".format(ob.name, ob.rotation_mode))
+
+            curves_translation = array_from_fcurves(fcurves, "location", 3)
+            curves_scale = array_from_fcurves(fcurves, "scale", 3)
+
+            # Decide what matters by presence of f-curves
+            if curves_rotation and fcurves_keyframe_in_range(curves_rotation, frame_start, frame_end):
+                seq.rotationMatters[index] = True
+
+            if curves_translation and fcurves_keyframe_in_range(curves_translation, frame_start, frame_end):
+                seq.translationMatters[index] = True
+
+            if curves_scale and fcurves_keyframe_in_range(curves_scale, frame_start, frame_end):
+                seq.scaleMatters[index] = True
 
             # Write the data where it matters
             # This assumes that animated_nodes is in the same order as shape.nodes

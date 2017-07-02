@@ -69,7 +69,7 @@ def import_material(color_source, dmat, filepath):
         bmat.use_shadeless = True
     if dmat.flags & Material.Translucent:
         bmat.use_transparency = True
-    
+
     if dmat.flags & Material.Additive:
         bmat.torque_props.blend_mode = "ADDITIVE"
     elif dmat.flags & Material.Subtractive:
@@ -167,6 +167,31 @@ def create_bmesh(dmesh, materials, shape):
 def file_base_name(filepath):
     return os.path.basename(filepath).rsplit(".", 1)[0]
 
+def insert_reference(frame, shape_nodes):
+    for node in shape_nodes:
+        ob = node.bl_ob
+
+        curves = ob_location_curves(ob)
+        for curve in curves:
+            curve.keyframe_points.add(1)
+            key = curve.keyframe_points[-1]
+            key.interpolation = "LINEAR"
+            key.co = (frame, ob.location[curve.array_index])
+
+        curves = ob_scale_curves(ob)
+        for curve in curves:
+            curve.keyframe_points.add(1)
+            key = curve.keyframe_points[-1]
+            key.interpolation = "LINEAR"
+            key.co = (frame, ob.scale[curve.array_index])
+
+        _, curves = ob_rotation_curves(ob)
+        for curve in curves:
+            curve.keyframe_points.add(1)
+            key = curve.keyframe_points[-1]
+            key.interpolation = "LINEAR"
+            key.co = (frame, ob.rotation_quaternion[curve.array_index])
+
 def load(operator, context, filepath,
          reference_keyframe=True,
          import_sequences=True,
@@ -181,7 +206,7 @@ def load(operator, context, filepath,
         write_debug_report(filepath + ".txt", shape)
         with open(filepath + ".pass.dts", "wb") as fd:
             shape.save(fd)
-    
+
     # Create a Blender material for each DTS material
     materials = {}
     color_source = get_rgb_colors()
@@ -225,7 +250,7 @@ def load(operator, context, filepath,
             # node.tail = node.head + Vector((0, 0, 0.25))
             # node.tail = node.mat.to_translation()
             # node.head = node.tail - Vector((0, 0, 0.25))
-        
+
         bpy.ops.object.mode_set(mode="EDIT")
 
         edit_bone_table = []
@@ -241,13 +266,13 @@ def load(operator, context, filepath,
 
             if node.parent != -1:
                 bone.parent = edit_bone_table[node.parent]
-            
+
             bone.matrix = node.mat
             bone["nodeIndex"] = i
 
             edit_bone_table.append(bone)
             bone_names.append(bone.name)
-        
+
         bpy.ops.object.mode_set(mode="OBJECT")
     else:
         if reference_keyframe:
@@ -259,10 +284,11 @@ def load(operator, context, filepath,
                 reference_frame = reference_marker.frame
         else:
             reference_frame = None
-        
+
         # Create an empty for every node
         for i, node in enumerate(shape.nodes):
             ob = bpy.data.objects.new(dedup_name(bpy.data.objects, shape.names[node.name]), None)
+            node.bl_ob = ob
             ob["nodeIndex"] = i
             ob.empty_draw_type = "SINGLE_ARROW"
             ob.empty_draw_size = 0.5
@@ -280,28 +306,9 @@ def load(operator, context, filepath,
             node_obs.append(ob)
             node_obs_val[node] = ob
 
-            if reference_keyframe:
-                curves = ob_location_curves(ob)
-                for curve in curves:
-                    curve.keyframe_points.add(1)
-                    key = curve.keyframe_points[-1]
-                    key.interpolation = "LINEAR"
-                    key.co = (reference_frame, ob.location[curve.array_index])
-                
-                curves = ob_scale_curves(ob)
-                for curve in curves:
-                    curve.keyframe_points.add(1)
-                    key = curve.keyframe_points[-1]
-                    key.interpolation = "LINEAR"
-                    key.co = (reference_frame, ob.scale[curve.array_index])
-                
-                _, curves = ob_rotation_curves(ob)
-                for curve in curves:
-                    curve.keyframe_points.add(1)
-                    key = curve.keyframe_points[-1]
-                    key.interpolation = "LINEAR"
-                    key.co = (reference_frame, ob.rotation_quaternion[curve.array_index])
-    
+        if reference_keyframe:
+            insert_reference(reference_frame, shape.nodes)
+
     # Try animation?
     if import_sequences:
         globalToolIndex = 10
@@ -401,8 +408,11 @@ def load(operator, context, filepath,
                             globalToolIndex + frameIndex * step,
                             vec[curve.array_index])
 
+            # Insert a reference frame immediately before the animation
+            insert_reference(globalToolIndex - 2, shape.nodes)
+
             context.scene.timeline_markers.new(name + ":start", globalToolIndex)
-            context.scene.timeline_markers.new(name + ":end", globalToolIndex + seq.numKeyframes * step)
+            context.scene.timeline_markers.new(name + ":end", globalToolIndex + seq.numKeyframes * step - 1)
             globalToolIndex += seq.numKeyframes * step + 30
 
         if "Sequences" in bpy.data.texts:
