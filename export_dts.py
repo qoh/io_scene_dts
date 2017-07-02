@@ -517,6 +517,13 @@ def save(operator, context, filepath,
         seq.flags = Sequence.AlignedScale
         seq.priority = 1
 
+        frame_start = markers["start"].frame
+        frame_end = markers["end"].frame
+        frame_range = frame_end - frame_start + 1
+
+        seq.toolBegin = frame_start
+        seq.duration = frame_range * (context.scene.render.fps_base / context.scene.render.fps)
+
         if name in sequence_flags:
             for part in sequence_flags[name]:
                 flag, *data = part.split(" ", 1)
@@ -528,15 +535,10 @@ def save(operator, context, filepath,
                     seq.flags |= Sequence.Cyclic
                 elif flag == "blend":
                     seq.flags |= Sequence.Blend
+                elif flag == "duration":
+                    seq.duration = float(data)
                 else:
                     print("Warning: Unknown flag '{}' (used by sequence '{}')".format(flag, name))
-
-        frame_start = markers["start"].frame
-        frame_end = markers["end"].frame
-        frame_range = frame_end - frame_start + 1
-
-        seq.toolBegin = frame_start
-        seq.duration = frame_range * (context.scene.render.fps_base / context.scene.render.fps)
 
         seq.numKeyframes = frame_range
         seq.firstGroundFrame = len(shape.ground_translations)
