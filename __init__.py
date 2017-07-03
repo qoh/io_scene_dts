@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Torque DTS format",
     "author": "port",
-    "version": (0, 1, 0),
+    "version": (0, 1, 1),
     "blender": (2, 74, 0),
     "location": "File > Import-Export",
     "description": "Import-Export DTS, Import DTS mesh, UV's, "
@@ -55,7 +55,7 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
         default="*.dts",
         options={'HIDDEN'},
         )
-    
+
     reference_keyframe = BoolProperty(
         name="Reference keyframe",
         description="Set a keyframe with the reference pose for blend animations",
@@ -73,7 +73,7 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
         description="Import bones into an armature instead of empties. Does not work with 'Import sequences'.",
         default=False,
         )
-    
+
     debug_report = BoolProperty(
         name="Write debug report",
         description="Dump out all the information from the DTS to a file",
@@ -86,7 +86,7 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
 
         keywords = self.as_keywords(ignore=("filter_glob", "split_mode"))
         return import_dts.load(self, context, **keywords)
-    
+
 class ImportDSQ(bpy.types.Operator, ImportHelper):
     """Load a Torque DSQ File"""
     bl_idname = "import_scene.dsq"
@@ -165,7 +165,7 @@ class ExportDTS(bpy.types.Operator, ExportHelper):
         description="Apply modifiers to meshes",
         default=True,
         )
-    
+
     use_armature = BoolProperty(
         name="Experimental: Skeleton from armature",
         description="Export bones of an armature into the shape",
