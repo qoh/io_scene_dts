@@ -193,7 +193,7 @@ def save(operator, context, filepath,
         shape.default_translations.append(node.translation)
         shape.default_rotations.append(node.rotation)
 
-    node_lookup = {ob: node_indices[node] for ob, node in node_lookup.items()}
+    node_lookup = {ob: node_indices.get(node, False) for ob, node in node_lookup.items()}
 
     if not armature:
         animated_nodes = []
