@@ -6,7 +6,7 @@ from .DtsShape import DtsShape
 from .DtsTypes import *
 from .write_report import write_debug_report
 from .util import default_materials, resolve_texture, get_rgb_colors, fail, \
-    ob_location_curves, ob_scale_curves, ob_rotation_curves, evaluate_all
+    ob_location_curves, ob_scale_curves, ob_rotation_curves, ob_rotation_data, evaluate_all
 
 import operator
 from itertools import zip_longest, count
@@ -186,11 +186,12 @@ def insert_reference(frame, shape_nodes):
             key.co = (frame, ob.scale[curve.array_index])
 
         _, curves = ob_rotation_curves(ob)
+        rot = ob_rotation_data(ob)
         for curve in curves:
             curve.keyframe_points.add(1)
             key = curve.keyframe_points[-1]
             key.interpolation = "LINEAR"
-            key.co = (frame, ob.rotation_quaternion[curve.array_index])
+            key.co = (frame, rot[curve.array_index])
 
 def load(operator, context, filepath,
          reference_keyframe=True,
@@ -371,7 +372,9 @@ def load(operator, context, filepath,
                             return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
                         ref_rot = Quaternion(evaluate_all(curves, reference_frame))
                         rot = ref_rot * rot
-                    if mode != "QUATERNION":
+                    if mode == 'AXIS_ANGLE':
+                        rot = rot.to_axis_angle()
+                    elif mode != 'QUATERNION':
                         rot = rot.to_euler(mode)
 
                     for curve in curves:

@@ -3,7 +3,8 @@ from math import ceil
 
 from .DsqFile import DsqFile
 from .DtsTypes import Sequence, Quaternion, Vector
-from .util import fail, ob_location_curves, ob_scale_curves, ob_rotation_curves, evaluate_all, find_reference
+from .util import fail, ob_location_curves, ob_scale_curves, ob_rotation_curves, ob_rotation_data, \
+  evaluate_all, find_reference
 
 def get_free_name(name, taken):
   if name not in taken:
@@ -148,7 +149,9 @@ def load(operator, context, filepath,
             return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
           ref_rot = Quaternion(evaluate_all(curves, reference_frame))
           rot = ref_rot * rot
-        if mode != "QUATERNION":
+        if mode == 'AXIS_ANGLE':
+          rot = rot.to_axis_angle()
+        elif mode != 'QUATERNION':
           rot = rot.to_euler(mode)
 
         for curve in curves:

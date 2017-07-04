@@ -105,17 +105,25 @@ def ob_location_curves(ob):
 def ob_scale_curves(ob):
   return ob_curves_array(ob, "scale", 3)
 
-def ob_rotation_curves(ob):
-  if ob.rotation_mode == "QUATERNION":
-    data_path = "rotation_quaternion"
-    array_count = 4
-  elif ob.rotation_mode == "XYZ":
-    data_path = "rotation_euler"
-    array_count = 3
-  else:
-    assert false, "unhandled rotation mode '{}' on '{}'".format(ob.rotation_mode, ob.name)
+def fcurves_path_from_rotation(ob):
+    if ob.rotation_mode == 'QUATERNION':
+        return ('rotation_quaternion', 4)
+    elif ob.rotation_mode == 'AXIS_ANGLE':
+        return ('rotation_axis_angle', 4)
+    else:
+        return ('rotation_euler', 3)
 
-  return ob.rotation_mode, ob_curves_array(ob, data_path, array_count)
+def ob_rotation_data(ob):
+    if ob.rotation_mode == 'QUATERNION':
+        return ob.rotation_quaternion
+    elif ob.rotation_mode == 'AXIS_ANGLE':
+        return ob.rotation_axis_angle
+    else:
+        return ob.rotation_euler
+
+def ob_rotation_curves(ob):
+    data_path, array_count = fcurves_path_from_rotation(ob)
+    return ob.rotation_mode, ob_curves_array(ob, data_path, array_count)
 
 def evaluate_all(curves, frame):
     return tuple(map(lambda c: c.evaluate(frame), curves))
@@ -132,22 +140,9 @@ def array_from_fcurves(curves, data_path, array_size):
     if found:
         return tuple(array)
 
-rotation_euler_modes = (
-    'XYZ',
-    'XZY',
-    'YXZ',
-    'YZX',
-    'ZXY',
-    'ZYX',
-)
-
 def array_from_fcurves_rotation(curves, ob):
-    if ob.rotation_mode == 'QUATERNION':
-        return array_from_fcurves(curves, 'rotation_quaternion', 4)
-    elif ob.rotation_mode in rotation_euler_modes:
-        return array_from_fcurves(curves, 'rotation_euler', 3)
-    elif ob.rotation_mode == 'AXIS_ANGLE':
-        return array_from_fcurves(curves, 'rotation_axis_angle', 4)
+    data_path, array_count = fcurves_path_from_rotation(ob)
+    return array_from_fcurves(curves, data_path, array_count)
 
 def fcurves_keyframe_in_range(curves, start, end):
     for curve in curves:
