@@ -132,6 +132,23 @@ def array_from_fcurves(curves, data_path, array_size):
     if found:
         return tuple(array)
 
+rotation_euler_modes = (
+    'XYZ',
+    'XZY',
+    'YXZ',
+    'YZX',
+    'ZXY',
+    'ZYX',
+)
+
+def array_from_fcurves_rotation(curves, ob):
+    if ob.rotation_mode == 'QUATERNION':
+        return array_from_fcurves(curves, 'rotation_quaternion', 4)
+    elif ob.rotation_mode in rotation_euler_modes:
+        return array_from_fcurves(curves, 'rotation_euler', 3)
+    elif ob.rotation_mode == 'AXIS_ANGLE':
+        return array_from_fcurves(curves, 'rotation_axis_angle', 4)
+
 def fcurves_keyframe_in_range(curves, start, end):
     for curve in curves:
         for keyframe in curve.keyframe_points:

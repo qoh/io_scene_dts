@@ -6,7 +6,7 @@ from itertools import groupby
 from .DsqFile import DsqFile
 from .DtsTypes import *
 from .util import fail, evaluate_all, find_reference, array_from_fcurves, \
-    fcurves_keyframe_in_range, find_reference
+    array_from_fcurves_rotation, fcurves_keyframe_in_range, find_reference
 from .shared_export import find_seqs
 
 def save(operator, context, filepath,
@@ -155,13 +155,7 @@ def save(operator, context, filepath,
 
             fcurves = ob.animation_data.action.fcurves
 
-            if ob.rotation_mode == "QUATERNION":
-                curves_rotation = array_from_fcurves(fcurves, "rotation_quaternion", 4)
-            elif ob.rotation_mode == "XYZ":
-                curves_rotation = array_from_fcurves(fcurves, "rotation_euler", 3)
-            else: # TODO: Add all the other modes
-                curves_rotation = None
-
+            curves_rotation = array_from_fcurves_rotation(fcurves, ob)
             curves_translation = array_from_fcurves(fcurves, "location", 3)
             curves_scale = array_from_fcurves(fcurves, "scale", 3)
 

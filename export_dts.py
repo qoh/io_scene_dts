@@ -7,7 +7,7 @@ from .DtsShape import DtsShape
 from .DtsTypes import *
 from .write_report import write_debug_report
 from .util import fail, resolve_texture, default_materials, evaluate_all, find_reference, \
-    array_from_fcurves, fcurves_keyframe_in_range
+    array_from_fcurves, array_from_fcurves_rotation, fcurves_keyframe_in_range
 from .shared_export import find_seqs
 
 import re
@@ -193,7 +193,7 @@ def save(operator, context, filepath,
         shape.default_translations.append(node.translation)
         shape.default_rotations.append(node.rotation)
 
-    node_lookup = {ob: node_indices[node] for ob, node in node_lookup.items()}
+    node_lookup = {ob: node_indices.get(node, False) for ob, node in node_lookup.items()}
 
     if not armature:
         animated_nodes = []
@@ -581,13 +581,7 @@ def save(operator, context, filepath,
 
             fcurves = ob.animation_data.action.fcurves
 
-            if ob.rotation_mode == "QUATERNION":
-                curves_rotation = array_from_fcurves(fcurves, "rotation_quaternion", 4)
-            elif ob.rotation_mode == "XYZ":
-                curves_rotation = array_from_fcurves(fcurves, "rotation_euler", 3)
-            else: # TODO: Add all the other modes
-                curves_rotation = None
-
+            curves_rotation = array_from_fcurves_rotation(fcurves, ob)
             curves_translation = array_from_fcurves(fcurves, "location", 3)
             curves_scale = array_from_fcurves(fcurves, "scale", 3)
 
