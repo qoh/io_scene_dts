@@ -614,33 +614,38 @@ def save(operator, context, filepath,
 
     shape.verify()
 
-    if generate_texture != "disabled":
-        f_lookup = generate_texture in ("custom-missing", "all-missing")
-        f_custom = generate_texture in ("custom-missing", "custom-always")
-
-        for material in shape.materials:
-            if not hasattr(material, "bl_mat"):
-                continue
-
-            if f_custom and material.name.lower() in default_materials:
-                continue
-
-            if f_lookup and resolve_texture(filepath, material.name) is not None:
-                continue
-
-            bl_mat = material.bl_mat
-            color = bl_mat.diffuse_color * bl_mat.diffuse_intensity
-            color.r = linearrgb_to_srgb(color.r)
-            color.g = linearrgb_to_srgb(color.g)
-            color.b = linearrgb_to_srgb(color.b)
-
-            image = bpy.data.images.new(material.name.lower() + "_generated", 16, 16)
-            image.pixels = (color.r, color.g, color.b, 1.0) * 256
-            image.filepath_raw = os.path.join(os.path.dirname(filepath), material.name + ".png")
-            image.file_format = "PNG"
-            image.save()
-
     with open(filepath, "wb") as fd:
         shape.save(fd)
 
+    write_material_textures(generate_textures, filepath, shape)
+
     return {"FINISHED"}
+
+def write_material_textures(mode, filepath, shape):
+    if mode == 'disabled':
+        return
+
+    f_lookup = mode in ("custom-missing", "all-missing")
+    f_custom = mode in ("custom-missing", "custom-always")
+
+    for material in shape.materials:
+        if not hasattr(material, "bl_mat"):
+            continue
+
+        if f_custom and material.name.lower() in default_materials:
+            continue
+
+        if f_lookup and resolve_texture(filepath, material.name) is not None:
+            continue
+
+        bl_mat = material.bl_mat
+        color = bl_mat.diffuse_color * bl_mat.diffuse_intensity
+        color.r = linearrgb_to_srgb(color.r)
+        color.g = linearrgb_to_srgb(color.g)
+        color.b = linearrgb_to_srgb(color.b)
+
+        image = bpy.data.images.new(material.name.lower() + "_generated", 16, 16)
+        image.pixels = (color.r, color.g, color.b, 1.0) * 256
+        image.filepath_raw = os.path.join(os.path.dirname(filepath), material.name + ".png")
+        image.file_format = "PNG"
+        image.save()
