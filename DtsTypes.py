@@ -292,10 +292,30 @@ class Mesh:
 		stream.write32(self.get_flags())
 		stream.guard()
 
-		mtype = self.get_type()
+		if mtype == Mesh.SkinType:
+		    stream.write32(len(self.initialVerts))
+		    for v in self.initialVerts:
+		        stream.write_vec3(v)
+		    for v in self.initialNormals:
+		        stream.write_vec3(v)
+		    stream.write8(*self.initialENormals)
 
-		if mtype != Mesh.StandardType:
-			raise ValueError("cannot write non standard mesh")
+		    stream.write32(len(self.initialTransforms))
+		    for m in self.initialTransforms:
+		        for f in m:
+		            stream.write_float(f)
+
+		    stream.write32(len(self.vertexIndex))
+		    stream.write32(*self.vertexIndex)
+		    stream.write32(*self.boneIndex)
+		    for f in self.weight:
+		        stream.write_float(f)
+		    stream.write32(len(self.nodeIndex))
+		    stream.write32(*self.nodeIndex)
+
+		    stream.guard()
+		elif mtype != Mesh.StandardType:
+			raise ValueError("cannot write {} mesh".format(mtype))
 
 	def read_standard_mesh(self, stream):
 		stream.guard()
@@ -329,23 +349,20 @@ class Mesh:
 		self.read_standard_mesh(stream)
 
 		numVerts = sz = stream.read32()
-		self.verts = [stream.read_vec3() for i in range(sz)]
+		self.initialVerts = [stream.read_vec3() for i in range(sz)]
+		self.initialNormals = [stream.read_vec3() for i in range(numVerts)]
+		self.initialENormals = [stream.read8() for i in range(numVerts)]
 
-		self.normals = [stream.read_vec3() for i in range(numVerts)]
-		self.enormals = [stream.read8() for i in range(numVerts)]
-
 		sz = stream.read32()
-		self.initialTransforms = [[stream.read32() for i in range(16)] for i in range(sz)]
+		self.initialTransforms = [[stream.read_float() for i in range(16)] for i in range(sz)]
 		sz = stream.read32()
-		self.vertexIndexList = [stream.read32() for i in range(sz)]
-		self.boneIndexList = [stream.read32() for i in range(sz)]
-		self.weightList = [stream.read32() for i in range(sz)]
+		self.vertexIndex = [stream.read32() for i in range(sz)]
+		self.boneIndex = [stream.read32() for i in range(sz)]
+		self.weight = [stream.read_float() for i in range(sz)]
 		sz = stream.read32()
-		self.nodeIndexList = [stream.read32() for i in range(sz)]
+		self.nodeIndex = [stream.read32() for i in range(sz)]
 
 		stream.guard()
-
-		# allocShape32(0)
 
 	@classmethod
 	def read(cls, stream):
