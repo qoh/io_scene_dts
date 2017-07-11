@@ -13,9 +13,7 @@ from .shared_export import find_seqs
 import re
 # re really isn't necessary. oh well.
 re_lod_size = re.compile(r"(-?\d+)$")
-re_lod_dup_name = re.compile(r"\.LOD\d{3}$")
 common_col_name = re.compile(r"^(LOS)?[cC]ol-?\d+$")
-default_bone_name = re.compile(r"^Bone(\.\d+)?$")
 
 def undup_name(n):
     return n.split("#", 1)[0]
