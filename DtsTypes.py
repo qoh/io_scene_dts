@@ -206,6 +206,9 @@ class Mesh:
 		self.indices = []
 		self.mindices = []
 
+		self.bones = []
+		self.influences = []
+
 	def get_type(self):
 		return self.type & Mesh.TypeMask
 
@@ -292,10 +295,34 @@ class Mesh:
 		stream.write32(self.get_flags())
 		stream.guard()
 
-		mtype = self.get_type()
+		if mtype == Mesh.SkinType:
+		    stream.write32(len(self.verts))
+		    for v in self.verts:
+		        stream.write_vec3(v)
+		    for v in self.normals:
+		        stream.write_vec3(v)
+		    stream.write8(*self.enormals)
 
-		if mtype != Mesh.StandardType:
-			raise ValueError("cannot write non standard mesh")
+		    stream.write32(len(self.bones))
+		    for _, initial_transform in self.bones:
+		        for f in initial_transform:
+		            stream.write_float(f)
+
+		    stream.write32(len(self.influences))
+		    for vertex_index, _, _ in self.influences:
+			stream.write32(vertex_index)
+		    for _, bone_index, _ in self.influences:
+			stream.write32(bone_index)
+		    for _, _, weight in self.influences:
+			stream.write_float(weight)
+
+		    stream.write32(len(self.bones))
+		    for node_index, _ in self.bones:
+			stream.write32(node_index)
+
+		    stream.guard()
+		elif mtype != Mesh.StandardType:
+			raise ValueError("cannot write {} mesh".format(mtype))
 
 	def read_standard_mesh(self, stream):
 		stream.guard()
@@ -328,24 +355,35 @@ class Mesh:
 	def read_skin_mesh(self, stream):
 		self.read_standard_mesh(stream)
 
-		numVerts = sz = stream.read32()
-		self.verts = [stream.read_vec3() for i in range(sz)]
+		sz = stream.read32()
+		_ = [stream.read_vec3() for i in range(sz)]
+		_ = [stream.read_vec3() for i in range(numVerts)]
+		_ = [stream.read8() for i in range(numVerts)]
 
-		self.normals = [stream.read_vec3() for i in range(numVerts)]
-		self.enormals = [stream.read8() for i in range(numVerts)]
+		sz = stream.read32()
+		self.bones = [[None, None] for i in range(sz)]
+
+		for i in range(sz):
+		    initial_transform = [stream.read_float() for i in range(16)]
+		    self.bones[i][2] = initial_transform
 
 		sz = stream.read32()
-		self.initialTransforms = [[stream.read32() for i in range(16)] for i in range(sz)]
+		self.influences = [[None, None, None] for i in range(sz)]
+
+		for i in range(sz):
+		    self.influences[i][1] = stream.read32()
+		for i in range(sz):
+		    self.influences[i][2] = stream.read32()
+		for i in range(sz):
+		    self.influences[i][3] = stream.read_float()
+
 		sz = stream.read32()
-		self.vertexIndexList = [stream.read32() for i in range(sz)]
-		self.boneIndexList = [stream.read32() for i in range(sz)]
-		self.weightList = [stream.read32() for i in range(sz)]
-		sz = stream.read32()
-		self.nodeIndexList = [stream.read32() for i in range(sz)]
+		assert sz == len(self.bones)
+
+		for i in range(sz):
+		    self.bones[i][1] = stream.read32()
 
 		stream.guard()
-
-		# allocShape32(0)
 
 	@classmethod
 	def read(cls, stream):
