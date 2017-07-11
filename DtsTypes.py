@@ -1,3 +1,5 @@
+# vim: tabstop=8 noexpandtab
+
 from collections import namedtuple
 from struct import pack, unpack
 from enum import Enum
@@ -63,12 +65,14 @@ class Object:
 		return obj
 
 class IflMaterial:
-	def __init__(self, name, slot, firstFrame, time, numFrames):
+	def __init__(self, name, slot):
 		self.name = name
 		self.slot = slot
-		self.firstFrame = firstFrame
-		self.time = time
-		self.numFrames = numFrames
+
+		# Unused
+		self.firstFrame = -1
+		self.time = -1
+		self.numFrames = -1
 
 	def write(self, stream):
 		stream.write32(
@@ -77,9 +81,12 @@ class IflMaterial:
 
 	@classmethod
 	def read(cls, stream):
-		return cls(
-			stream.read32(), stream.read32(),
-			stream.read32(), stream.read32(), stream.read32())
+		instance = cls(
+			stream.read32(), stream.read32())
+		instance.firstFrame = stream.read32()
+		instance.time = stream.read32()
+		instance.numFrames = stream.read32()
+		return instance
 
 class Subshape:
 	def __init__(self, firstNode, firstObject, firstDecal, numNodes, numObjects, numDecals):

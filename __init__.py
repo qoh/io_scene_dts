@@ -356,9 +356,6 @@ class TorqueMaterialProperties(bpy.types.PropertyGroup):
     t_wrap = BoolProperty(name="T-Wrap", default=True)
     use_ifl = BoolProperty(name="IFL")
     ifl_name = StringProperty(name="Name")
-    ifl_first_frame = IntProperty(name="First frame")
-    ifl_num_frames = IntProperty(name="Frame count")
-    ifl_time = IntProperty(name="Time")
 
 class TorqueMaterialPanel(bpy.types.Panel):
     bl_idname = "MATERIAL_PT_torque"
@@ -387,10 +384,6 @@ class TorqueMaterialPanel(bpy.types.Panel):
         sublayout.prop(obj.torque_props, "ifl_name", text="")
         sublayout = layout.column()
         sublayout.enabled = obj.torque_props.use_ifl
-        row = sublayout.row()
-        row.prop(obj.torque_props, "ifl_first_frame")
-        row.prop(obj.torque_props, "ifl_num_frames")
-        sublayout.prop(obj.torque_props, "ifl_time")
 
 def menu_func_import_dts(self, context):
     self.layout.operator(ImportDTS.bl_idname, text="Torque (.dts)")

@@ -220,9 +220,6 @@ def load(operator, context, filepath,
         mat = materials[shape.materials[ifl.slot]]
         assert mat.torque_props.use_ifl == True
         mat.torque_props.ifl_name = shape.names[ifl.name]
-        mat.torque_props.ifl_first_frame = ifl.firstFrame
-        mat.torque_props.ifl_num_frames = ifl.numFrames
-        mat.torque_props.ifl_time = ifl.time
 
     # First load all the nodes into armatures
     lod_by_mesh = {}

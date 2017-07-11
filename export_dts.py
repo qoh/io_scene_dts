@@ -60,10 +60,7 @@ def export_material(mat, shape):
         ifl_index = len(shape.iflmaterials)
         ifl = IflMaterial(
             name=shape.name(mat.torque_props.ifl_name),
-            slot=material_index,
-            firstFrame=mat.torque_props.ifl_first_frame,
-            numFrames=mat.torque_props.ifl_num_frames,
-            time=mat.torque_props.ifl_time)
+            slot=material_index)
         shape.iflmaterials.append(ifl)
 
     material = Material(name=undup_name(mat.name), flags=flags)
