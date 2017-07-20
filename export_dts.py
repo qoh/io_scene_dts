@@ -305,6 +305,11 @@ def save(operator, context, filepath,
         else:
             scene_objects[name][1][lod_name] = (bobj, transform_mat)
 
+    # If the shape is empty, add a detail level so it is valid
+    if not shape.detail_levels:
+        dl = DetailLevel(name=shape.name('detail1'), subshape=0, objectDetail=-1, size=1)
+        shape.detail_levels.append(dl)
+
     # Put objects with transparent materials last
     # Note: If this plugin ever needs to do anything with objectstates,
     #       that needs to be handled properly. a37hm: earch for ff56g
