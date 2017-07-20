@@ -222,13 +222,29 @@ def save(operator, context, filepath,
         transform_mat = bobj.matrix_local
 
         if bobj.parent:
-            if bobj.parent not in node_lookup:
-                return fail(operator, "The mesh '{}' has a parent of type '{}' (named '{}'). You can only parent meshes to empties, not other meshes.".format(bobj.name, bobj.parent.type, bobj.parent.name))
+            if bobj.parent_type == 'BONE':
+                armature = bobj.parent
+                bone = armature.data.bones[bobj.parent_bone]
 
-            if node_lookup[bobj.parent] is False: # not selected
-                continue
+                if bone not in node_lookup:
+                    print('Ignoring mesh {} - parent bone {} not included'
+                          .format(bobj.name, bone.name))
+                    continue
 
-            attach_node = node_lookup[bobj.parent].index
+                node = node_lookup[bone]
+                attach_node = node.index
+
+                # Compensate for matrix_local pointing to tail, offset to head
+                # Does this need to use node.matrix somehow?
+                transform_mat = Matrix.Translation((0, bone.length, 0)) * transform_mat
+            else:
+                if bobj.parent not in node_lookup:
+                    return fail(operator, "The mesh '{}' has a parent of type '{}' (named '{}'). You can only parent meshes to empties, not other meshes.".format(bobj.name, bobj.parent.type, bobj.parent.name))
+
+                if node_lookup[bobj.parent] is False: # not selected
+                    continue
+
+                attach_node = node_lookup[bobj.parent].index
         else:
             print("Warning: Mesh '{}' has no parent".format(bobj.name))
 
