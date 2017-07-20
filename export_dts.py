@@ -308,7 +308,7 @@ def save(operator, context, filepath,
         if lod_name in scene_objects[name][1]:
             print("Warning: Multiple objects {} in LOD {}, ignoring...".format(name, lod_name))
         else:
-            scene_objects[name][1][lod_name] = (bobj, transform_mat)
+            scene_objects[name][1][lod_name] = (bobj, transform_mat, armature_modifier)
 
     # If the shape is empty, add a detail level so it is valid
     if not shape.detail_levels:
@@ -350,10 +350,25 @@ def save(operator, context, filepath,
 
             if lod_name in lods:
                 print("Exporting mesh '{}' (LOD '{}')".format(shape.names[object.name], lod_name))
-                bobj, transform_mat = lods[lod_name]
+                bobj, transform_mat, armature_modifier = lods[lod_name]
+
+                if armature_modifier is None:
+                    mesh_type = Mesh.StandardType
+                else:
+                    mesh_type = Mesh.SkinType
+                    armature = armature_modifier.object
 
                 #########################
                 ### Welcome to complexity
+
+                # Disable the armature modifier so it does not deform the mesh
+                # when writing it to the DTS file
+                if armature_modifier is not None:
+                    was_show_render = armature_modifier.show_render
+                    was_show_viewport = armature_modifier.show_viewport
+
+                    armature_modifier.show_render = False
+                    armature_modifier.show_viewport = False
 
                 mesh = bobj.to_mesh(scene, apply_modifiers, "PREVIEW")
                 bm = bmesh.new()
@@ -362,10 +377,15 @@ def save(operator, context, filepath,
                 bm.to_mesh(mesh)
                 bm.free()
 
+                # Restore the armature modifier
+                if armature_modifier is not None:
+                    armature_modifier.show_render = was_show_render
+                    armature_modifier.show_viewport = was_show_viewport
+
                 # This is the danger zone
                 # Data from down here may not stay around!
 
-                dmesh = Mesh(Mesh.StandardType)
+                dmesh = Mesh(mesh_type)
                 shape.meshes.append(dmesh)
 
                 dmesh.b_matrix_world = bobj.matrix_world
@@ -434,6 +454,20 @@ def save(operator, context, filepath,
                                 dmesh.tverts.append(Vector((uv.x, 1 - uv.y)))
                             else:
                                 dmesh.tverts.append(Vector((0, 0)))
+
+                            if mesh_type == Mesh.SkinType:
+                                for group in vert.groups:
+                                    vertex_group = bobj.vertex_groups[group.group]
+
+                                    bone = armature.data.bones.get(vertex_group.name)
+                                    if bone is None:
+                                        continue
+
+                                    node = node_lookup.get(bone)
+                                    if node is False:
+                                        continue
+
+                                    print('vert', vert_index, 'group', vertex_group.name, 'bone', bone, 'node', node, 'weight', group.weight)
 
                     numElements = len(dmesh.verts) - firstElement
                     dmesh.primitives.append(Primitive(firstElement, numElements, flags))
