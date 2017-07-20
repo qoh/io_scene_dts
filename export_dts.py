@@ -199,35 +199,11 @@ def save_nodes(scene, shape, select_object):
 
     return node_lookup
 
-def save(operator, context, filepath,
-         select_object=False,
-         select_marker=False,
-         blank_material=True,
-         generate_texture="disabled",
-         apply_modifiers=True,
-         transform_mesh=False,
-         debug_report=False):
-    print("Exporting scene to DTS")
-
-    scene = context.scene
-    active = context.active_object
-    shape = DtsShape()
-
-    blank_material_index = None
-    auto_root_index = None
-
-    reference_frame = find_reference(scene)
-
-    if reference_frame is not None:
-        print("Note: Seeking to reference frame at", reference_frame)
-        scene.frame_set(reference_frame)
-
-    node_lookup = save_nodes(scene, shape, select_object)
-
-    # Now that we have all the nodes, attach our fabled objects to them
+def save_meshes(scene, shape, node_lookup, select_object, transform_mesh):
     scene_lods = {}
     scene_objects = {}
 
+    auto_root_index = None
     bounds_ob = None
 
     for bobj in scene.objects:
@@ -295,7 +271,8 @@ def save(operator, context, filepath,
                 transform_mat = Matrix.Translation((0, bone.length, 0)) * transform_mat
             elif bobj.parent_type == 'OBJECT':
                 if bobj.parent not in node_lookup:
-                    return fail(operator, "The mesh '{}' has a parent of type '{}' (named '{}'). You can only parent meshes to empties, not other meshes.".format(bobj.name, bobj.parent.type, bobj.parent.name))
+                    print("The mesh '{}' has a parent of type '{}' (named '{}'). You can only parent meshes to empties, not other meshes.".format(bobj.name, bobj.parent.type, bobj.parent.name))
+                    continue
 
                 if node_lookup[bobj.parent] is False: # not selected
                     continue
@@ -352,6 +329,34 @@ def save(operator, context, filepath,
         else:
             scene_objects[name][1][lod_name] = (bobj, transform_mat, armature_modifier)
 
+    return scene_lods, scene_objects, bounds_ob
+
+def save(operator, context, filepath,
+         select_object=False,
+         select_marker=False,
+         blank_material=True,
+         generate_texture="disabled",
+         apply_modifiers=True,
+         transform_mesh=False,
+         debug_report=False):
+    print("Exporting scene to DTS")
+
+    scene = context.scene
+    active = context.active_object
+    shape = DtsShape()
+
+    blank_material_index = None
+
+    reference_frame = find_reference(scene)
+
+    if reference_frame is not None:
+        print("Note: Seeking to reference frame at", reference_frame)
+        scene.frame_set(reference_frame)
+
+    node_lookup = save_nodes(scene, shape, select_object)
+    scene_lods, scene_objects, bounds_ob = save_meshes(
+        scene, shape, node_lookup, select_object, transform_mesh)
+
     # If the shape is empty, add a detail level so it is valid
     if not shape.detail_levels:
         dl = DetailLevel(name=shape.name('detail1'), subshape=0, objectDetail=-1, size=1)
@@ -382,9 +387,6 @@ def save(operator, context, filepath,
         else:
             object.numMeshes = 0
             continue
-
-        # if object.numMeshes == 0:
-        #     print("Nothing to be done for object {}".format(shape.names[object.name]))
 
         for i in range(object.numMeshes):
             lod = shape.detail_levels[i]
