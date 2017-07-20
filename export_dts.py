@@ -27,6 +27,49 @@ def linearrgb_to_srgb(c):
     else:
         return 1.055 * (c ** (1.0 / 2.4)) - 0.055
 
+def get_vertex_bone(mesh, node):
+    for bone_index, (node_index, _) in enumerate(mesh.bones):
+        if node_index == node.index:
+            return bone_index
+
+    bone_index = len(mesh.bones)
+    mat = node.bl_ob.matrix_local
+
+    # TODO: Move this conversion to DtsTypes.py
+    flat_mat = [x for y in mat.row for x in y]
+
+    mesh.bones.append((node.index, flat_mat))
+    return bone_index
+
+def add_vertex_influences(ob, armature, node_lookup, mesh, vert, vertex_index):
+    influences = []
+    total_weight = 0
+
+    for group in vert.groups:
+        vertex_group = ob.vertex_groups[group.group]
+
+        bone = armature.data.bones.get(vertex_group.name)
+        if bone is None:
+            continue
+
+        node = node_lookup.get(bone)
+        if node is False:
+            continue
+
+        influences.append((node, group.weight))
+        total_weight += group.weight
+
+    if total_weight == 0:
+        weight_multiplier = 1
+    else:
+        weight_multiplier = 1 / total_weight
+
+    for node, weight in influences:
+        mesh.influences.append((
+            vertex_index,
+            get_vertex_bone(mesh, node),
+            weight * weight_multiplier))
+
 def export_material(mat, shape):
     # print("Exporting material", mat.name)
 
@@ -435,6 +478,7 @@ def save(operator, context, filepath,
                         use_face_normal = not poly.use_smooth
 
                         for vert_index, loop_index in zip(reversed(poly.vertices), reversed(poly.loop_indices)):
+                            vertex_index = len(dmesh.verts)
                             dmesh.indices.append(len(dmesh.indices))
 
                             vert = mesh.vertices[vert_index]
@@ -456,18 +500,9 @@ def save(operator, context, filepath,
                                 dmesh.tverts.append(Vector((0, 0)))
 
                             if mesh_type == Mesh.SkinType:
-                                for group in vert.groups:
-                                    vertex_group = bobj.vertex_groups[group.group]
-
-                                    bone = armature.data.bones.get(vertex_group.name)
-                                    if bone is None:
-                                        continue
-
-                                    node = node_lookup.get(bone)
-                                    if node is False:
-                                        continue
-
-                                    print('vert', vert_index, 'group', vertex_group.name, 'bone', bone, 'node', node, 'weight', group.weight)
+                                add_vertex_influences(bobj, armature,
+                                                      node_lookup, dmesh,
+                                                      vert, vertex_index)
 
                     numElements = len(dmesh.verts) - firstElement
                     dmesh.primitives.append(Primitive(firstElement, numElements, flags))
