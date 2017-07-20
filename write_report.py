@@ -150,6 +150,15 @@ def write_debug_report(filepath, shape):
             # for i in range(len(mesh.tverts)):
             #     p("      tvert" + str(i) + " " + str(mesh.tverts[i]))
 
+            if mtype == Mesh.SkinType:
+                p("    + Bones ({})".format(len(mesh.bones)))
+                for i, (node_index, initial_transform) in enumerate(mesh.bones):
+                    p("      bone{} node={} initial_transform={}".format(i, node_index, initial_transform))
+                p("    + Influences ({}): <omitted>".format(len(mesh.influences)))
+                # for vi, bi, w in mesh.influences:
+                #     p
+                #     p("      influence vert{} bone{} weight={}".format(vi, bi, w))
+
         p("Sequences (" + str(len(shape.sequences)) + "):")
         for i, seq in enumerate(shape.sequences):
             p("  " + str(i) + " " + shape.names[seq.nameIndex])
