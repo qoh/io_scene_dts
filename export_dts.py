@@ -156,29 +156,7 @@ def export_bones(lookup, shape, armature, bones, parent=-1):
         lookup[bone] = node
         export_bones(lookup, shape, armature, bone.children, node)
 
-def save(operator, context, filepath,
-         select_object=False,
-         select_marker=False,
-         blank_material=True,
-         generate_texture="disabled",
-         apply_modifiers=True,
-         transform_mesh=False,
-         debug_report=False):
-    print("Exporting scene to DTS")
-
-    scene = context.scene
-    active = context.active_object
-    shape = DtsShape()
-
-    blank_material_index = None
-    auto_root_index = None
-
-    reference_frame = find_reference(scene)
-
-    if reference_frame is not None:
-        print("Note: Seeking to reference frame at", reference_frame)
-        scene.frame_set(reference_frame)
-
+def save_nodes(scene, shape, select_object):
     node_lookup = {}
 
     # Try to create nodes from empties armature bones
@@ -218,6 +196,33 @@ def save(operator, context, filepath,
 
         shape.default_translations.append(location)
         shape.default_rotations.append(rotation)
+
+    return node_lookup
+
+def save(operator, context, filepath,
+         select_object=False,
+         select_marker=False,
+         blank_material=True,
+         generate_texture="disabled",
+         apply_modifiers=True,
+         transform_mesh=False,
+         debug_report=False):
+    print("Exporting scene to DTS")
+
+    scene = context.scene
+    active = context.active_object
+    shape = DtsShape()
+
+    blank_material_index = None
+    auto_root_index = None
+
+    reference_frame = find_reference(scene)
+
+    if reference_frame is not None:
+        print("Note: Seeking to reference frame at", reference_frame)
+        scene.frame_set(reference_frame)
+
+    node_lookup = save_nodes(scene, shape, select_object)
 
     # Now that we have all the nodes, attach our fabled objects to them
     scene_lods = {}
