@@ -365,23 +365,23 @@ class Mesh:
 
 		for i in range(sz):
 		    initial_transform = [stream.read_float() for i in range(16)]
-		    self.bones[i][2] = initial_transform
+		    self.bones[i][1] = initial_transform
 
 		sz = stream.read32()
 		self.influences = [[None, None, None] for i in range(sz)]
 
 		for i in range(sz):
+		    self.influences[i][0] = stream.read32()
+		for i in range(sz):
 		    self.influences[i][1] = stream.read32()
 		for i in range(sz):
-		    self.influences[i][2] = stream.read32()
-		for i in range(sz):
-		    self.influences[i][3] = stream.read_float()
+		    self.influences[i][2] = stream.read_float()
 
 		sz = stream.read32()
 		assert sz == len(self.bones)
 
 		for i in range(sz):
-		    self.bones[i][1] = stream.read32()
+		    self.bones[i][0] = stream.read32()
 
 		stream.guard()
 
