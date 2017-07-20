@@ -160,16 +160,12 @@ def save(operator, context, filepath,
     shape.nodes.sort(key=lambda n:
         order_key.get(shape.names[n.name], n.bl_ob.get("nodeIndex", sys.maxsize)))
 
-    node_indices = {}
-
     for index, node in enumerate(shape.nodes):
         if not isinstance(node.parent, int):
             node.parent = shape.nodes.index(node.parent)
-        node_indices[node] = index
+        node.index = index
         shape.default_translations.append(node.translation)
         shape.default_rotations.append(node.rotation)
-
-    node_lookup = {ob: node_indices.get(node, False) for ob, node in node_lookup.items()}
 
     animated_nodes = []
 
@@ -224,7 +220,7 @@ def save(operator, context, filepath,
             if node_lookup[bobj.parent] is False: # not selected
                 continue
 
-            attach_node = node_lookup[bobj.parent]
+            attach_node = node_lookup[bobj.parent].index
         else:
             print("Warning: Mesh '{}' has no parent".format(bobj.name))
 
@@ -533,7 +529,7 @@ def save(operator, context, filepath,
                 animation_data[frame][ob] = ob.matrix_local.decompose()
 
         for ob in animated_nodes:
-            index = node_lookup[ob]
+            index = node_lookup[ob].index
             node = shape.nodes[index]
 
             base_translation = node.translation
