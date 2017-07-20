@@ -70,7 +70,7 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
 
     use_armature = BoolProperty(
         name="Experimental: Skeleton as armature",
-        description="Import bones into an armature instead of empties. Does not work with 'Import sequences'.",
+        description="Import bones into an armature instead of empties. Does not work with 'Import sequences'",
         default=False,
         )
 
@@ -152,12 +152,6 @@ class ExportDTS(bpy.types.Operator, ExportHelper):
             ("custom-always", "Custom (always)", "Generate textures for non-default material names"),
             ("all-missing", "All (if missing)", "Generate textures for all materials if not already present"),
             ("all-always", "All (always)", "Generate textures for all materials"))
-        )
-
-    transform_mesh = BoolProperty(
-        name="Use mesh transforms",
-        description="Apply local location/rotation/scale to geometry",
-        default=True,
         )
 
     apply_modifiers = BoolProperty(

@@ -204,7 +204,7 @@ def save_nodes(scene, shape, select_object):
 
     return node_lookup
 
-def save_meshes(scene, shape, node_lookup, select_object, transform_mesh):
+def save_meshes(scene, shape, node_lookup, select_object):
     scene_lods = {}
     scene_objects = {}
 
@@ -306,9 +306,6 @@ def save_meshes(scene, shape, node_lookup, select_object, transform_mesh):
 
             attach_node = auto_root_index
 
-        if not transform_mesh:
-            transform_mat = Matrix.Identity(4)
-
         lod_name_index, lod_name = shape.name_resolve(lod_name)
 
         if lod_name not in scene_lods:
@@ -397,7 +394,6 @@ def save(operator, context, filepath,
          blank_material=True,
          generate_texture="disabled",
          apply_modifiers=True,
-         transform_mesh=False,
          debug_report=False):
     print("Exporting scene to DTS")
 
@@ -415,7 +411,7 @@ def save(operator, context, filepath,
 
     node_lookup = save_nodes(scene, shape, select_object)
     scene_lods, scene_objects, bounds_ob = save_meshes(
-        scene, shape, node_lookup, select_object, transform_mesh)
+        scene, shape, node_lookup, select_object)
 
     # If the shape is empty, add a detail level so it is valid
     if not shape.detail_levels:
