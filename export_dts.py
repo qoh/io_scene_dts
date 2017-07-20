@@ -186,13 +186,18 @@ def save_nodes(scene, shape, select_object):
         if not isinstance(node.parent, int):
             node.parent = node.parent.index
 
-        node.index = index
-
         location, rotation, scale = node.matrix.decompose()
 
         if not seq_float_eq((1, 1, 1), scale):
             print("Warning: '{}' uses scale, which cannot be exported to DTS nodes"
                   .format(shape.names[node.name]))
+
+        node.index = index
+        node.matrix_world = Matrix.Translation(location) * rotation.to_matrix().to_4x4()
+
+        if node.parent != -1:
+            parent = shape.nodes[node.parent]
+            node.matrix_world = parent.matrix_world * node.matrix_world
 
         shape.default_translations.append(location)
         shape.default_rotations.append(rotation)
@@ -289,7 +294,13 @@ def save_meshes(scene, shape, node_lookup, select_object, transform_mesh):
         if attach_node is None:
             if auto_root_index is None:
                 auto_root_index = len(shape.nodes)
-                shape.nodes.append(Node(shape.name("__auto_root__")))
+
+                node = Node(shape.name("__auto_root__"))
+                node.index = auto_root_index
+                node.matrix = Matrix.Identity(4)
+                node.matrix_world = node.matrix
+
+                shape.nodes.append(node)
                 shape.default_rotations.append(Quaternion((1, 0, 0, 0)))
                 shape.default_translations.append(Vector())
 
@@ -330,6 +341,55 @@ def save_meshes(scene, shape, node_lookup, select_object, transform_mesh):
             scene_objects[name][1][lod_name] = (bobj, transform_mat, armature_modifier)
 
     return scene_lods, scene_objects, bounds_ob
+
+def compute_bounds(shape, bounds_ob):
+    print("Computing bounds")
+
+    # shape.smallest_size = None
+    # shape.smallest_detail_level = -1
+    #
+    # for i, lod in enumerate(shape.detail_levels):
+    #     if lod.size >= 0 and (shape.smallest_size == None or lod.size < shape.smallest_size):
+    #         shape.smallest_size = lod.size
+    #         shape.smallest_detail_level = i
+
+    shape.bounds = Box(
+        Vector(( 10e30,  10e30,  10e30)),
+        Vector((-10e30, -10e30, -10e30)))
+
+    shape.center = Vector()
+
+    shape.radius = 0
+    shape.radius_tube = 0
+
+    for obj in shape.objects:
+        for j in range(0, obj.numMeshes):
+            mesh = shape.meshes[obj.firstMesh + j]
+
+            if mesh.type == Mesh.NullType:
+                continue
+
+            mat = shape.nodes[obj.node].matrix_world
+            bounds = mesh.calculate_bounds_mat(mat)
+
+            shape.radius = max(shape.radius, mesh.calculate_radius_mat(mat, shape.center))
+            shape.radius_tube = max(shape.radius_tube, mesh.calculate_radius_tube_mat(mat, shape.center))
+
+            shape.bounds.min.x = min(shape.bounds.min.x, bounds.min.x)
+            shape.bounds.min.y = min(shape.bounds.min.y, bounds.min.y)
+            shape.bounds.min.z = min(shape.bounds.min.z, bounds.min.z)
+            shape.bounds.max.x = max(shape.bounds.max.x, bounds.max.x)
+            shape.bounds.max.y = max(shape.bounds.max.y, bounds.max.y)
+            shape.bounds.max.z = max(shape.bounds.max.z, bounds.max.z)
+
+    # Is there a bounds mesh? Use that instead.
+    if bounds_ob:
+      shape.bounds = Box(Vector(bounds_ob.bound_box[0]), Vector(bounds_ob.bound_box[6]))
+
+    shape.center = Vector((
+        (shape.bounds.min.x + shape.bounds.max.x) / 2,
+        (shape.bounds.min.y + shape.bounds.max.y) / 2,
+        (shape.bounds.min.z + shape.bounds.max.z) / 2))
 
 def save(operator, context, filepath,
          select_object=False,
@@ -432,7 +492,7 @@ def save(operator, context, filepath,
                 dmesh = Mesh(mesh_type)
                 shape.meshes.append(dmesh)
 
-                dmesh.b_matrix_world = bobj.matrix_world
+                dmesh.matrix_world = bobj.matrix_world
 
                 dmesh.bounds = dmesh.calculate_bounds_mat(Matrix())
                 #dmesh.center = Vector((
@@ -525,52 +585,7 @@ def save(operator, context, filepath,
     shape.subshapes.append(Subshape(0, 0, 0, len(shape.nodes), len(shape.objects), 0))
 
     # Figure out all the things
-    print("Computing bounds")
-    # shape.smallest_size = None
-    # shape.smallest_detail_level = -1
-    #
-    # for i, lod in enumerate(shape.detail_levels):
-    #     if lod.size >= 0 and (shape.smallest_size == None or lod.size < shape.smallest_size):
-    #         shape.smallest_size = lod.size
-    #         shape.smallest_detail_level = i
-
-    shape.bounds = Box(
-        Vector(( 10e30,  10e30,  10e30)),
-        Vector((-10e30, -10e30, -10e30)))
-
-    shape.center = Vector()
-
-    shape.radius = 0
-    shape.radius_tube = 0
-
-    for i, obj in enumerate(shape.objects):
-        for j in range(0, obj.numMeshes):
-            mesh = shape.meshes[obj.firstMesh + j]
-
-            if mesh.type == Mesh.NullType:
-                continue
-
-            b_mat = mesh.b_matrix_world
-            bounds = mesh.calculate_bounds_mat(b_mat)
-
-            shape.radius = max(shape.radius, mesh.calculate_radius_mat(b_mat, shape.center))
-            shape.radius_tube = max(shape.radius_tube, mesh.calculate_radius_tube_mat(b_mat, shape.center))
-
-            shape.bounds.min.x = min(shape.bounds.min.x, bounds.min.x)
-            shape.bounds.min.y = min(shape.bounds.min.y, bounds.min.y)
-            shape.bounds.min.z = min(shape.bounds.min.z, bounds.min.z)
-            shape.bounds.max.x = max(shape.bounds.max.x, bounds.max.x)
-            shape.bounds.max.y = max(shape.bounds.max.y, bounds.max.y)
-            shape.bounds.max.z = max(shape.bounds.max.z, bounds.max.z)
-
-    # Is there a bounds mesh? Use that instead.
-    if bounds_ob:
-      shape.bounds = Box(Vector(bounds_ob.bound_box[0]), Vector(bounds_ob.bound_box[6]))
-
-    shape.center = Vector((
-        (shape.bounds.min.x + shape.bounds.max.x) / 2,
-        (shape.bounds.min.y + shape.bounds.max.y) / 2,
-        (shape.bounds.min.z + shape.bounds.max.z) / 2))
+    compute_bounds(shape, bounds_ob)
 
     sequences, sequence_flags = find_seqs(context.scene, select_marker)
 
