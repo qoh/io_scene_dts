@@ -617,7 +617,7 @@ def save(operator, context, filepath,
     with open(filepath, "wb") as fd:
         shape.save(fd)
 
-    write_material_textures(generate_textures, filepath, shape)
+    write_material_textures(generate_texture, filepath, shape)
 
     return {"FINISHED"}
 
