@@ -114,12 +114,6 @@ def export_material(mat, shape):
 def seq_float_eq(a, b):
     return all(abs(i - j) < 0.000001 for i, j in zip(a, b))
 
-def transform_co(ob, co):
-    return ob.matrix_local * co
-
-def transform_normal(ob, normal):
-    return (ob.matrix_local.to_3x3() * normal).normalized()
-
 def export_empty_node(lookup, shape, select_object, ob, parent=-1):
     if select_object and not ob.select:
         lookup[ob] = False
