@@ -357,8 +357,8 @@ class Mesh:
 
                 sz = stream.read32()
                 _ = [stream.read_vec3() for i in range(sz)]
-                _ = [stream.read_vec3() for i in range(numVerts)]
-                _ = [stream.read8() for i in range(numVerts)]
+                _ = [stream.read_vec3() for i in range(sz)]
+                _ = [stream.read8() for i in range(sz)]
 
                 sz = stream.read32()
                 self.bones = [[None, None] for i in range(sz)]
