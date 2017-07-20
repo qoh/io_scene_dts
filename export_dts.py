@@ -157,8 +157,8 @@ def save(operator, context, filepath,
         order_key = {}
 
     # Sort by node indices from the DTS
-    shape.nodes = list(sorted(shape.nodes, key=lambda n:
-        order_key.get(shape.names[n.name], n.bl_ob.get("nodeIndex", sys.maxsize))))
+    shape.nodes.sort(key=lambda n:
+        order_key.get(shape.names[n.name], n.bl_ob.get("nodeIndex", sys.maxsize)))
 
     node_indices = {}
 

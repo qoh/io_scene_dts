@@ -55,8 +55,8 @@ def save(operator, context, filepath,
         order_key = {}
 
     # Sort by node indices from the DTS
-    dsq.nodes = list(sorted(dsq.nodes, key=lambda n:
-        order_key.get(n, node_ob[n].get("nodeIndex", sys.maxsize))))
+    dsq.nodes.sort(key=lambda n:
+        order_key.get(n, node_ob[n].get("nodeIndex", sys.maxsize)))
 
     node_index = {node_ob[name]: i for i, name in enumerate(dsq.nodes)}
     auto_root_index = None
