@@ -220,8 +220,22 @@ def save(operator, context, filepath,
             continue
 
         transform_mat = bobj.matrix_local
+        armature_modifier = None
 
-        if bobj.parent:
+        # Try to find an armature modifier on the object
+        for modifier in bobj.modifiers:
+            if modifier.type != 'ARMATURE':
+                continue
+
+            armature_modifier = modifier
+            break
+
+        if armature_modifier is not None:
+            # Should we do something with the parent here?
+            # Ignore it for now.
+            print('NYI: Armature modifier on mesh {}'.format(bobj.name))
+            attach_node = None
+        elif bobj.parent:
             if bobj.parent_type == 'BONE':
                 armature = bobj.parent
                 bone = armature.data.bones[bobj.parent_bone]
@@ -237,7 +251,7 @@ def save(operator, context, filepath,
                 # Compensate for matrix_local pointing to tail, offset to head
                 # Does this need to use node.matrix somehow?
                 transform_mat = Matrix.Translation((0, bone.length, 0)) * transform_mat
-            else:
+            elif bobj.parent_type == 'OBJECT':
                 if bobj.parent not in node_lookup:
                     return fail(operator, "The mesh '{}' has a parent of type '{}' (named '{}'). You can only parent meshes to empties, not other meshes.".format(bobj.name, bobj.parent.type, bobj.parent.name))
 
@@ -245,9 +259,15 @@ def save(operator, context, filepath,
                     continue
 
                 attach_node = node_lookup[bobj.parent].index
+            else:
+                print('Warning: Mesh "{}" is using an unsupported parenting type "{}"'
+                      .format(bobj.name, bobj.parent_type))
+                attach_node = None
         else:
             print("Warning: Mesh '{}' has no parent".format(bobj.name))
+            attach_node = None
 
+        if attach_node is None:
             if auto_root_index is None:
                 auto_root_index = len(shape.nodes)
                 shape.nodes.append(Node(shape.name("__auto_root__")))
