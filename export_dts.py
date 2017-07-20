@@ -128,7 +128,6 @@ def save(operator, context, filepath,
          generate_texture="disabled",
          apply_modifiers=True,
          transform_mesh=False,
-         use_armature=False,
          debug_report=False):
     print("Exporting scene to DTS")
 
@@ -138,34 +137,16 @@ def save(operator, context, filepath,
 
     blank_material_index = None
     auto_root_index = None
-    armature = None
 
-    if use_armature:
-        if active and active.type == "ARMATURE":
-            armature = active
-        else:
-            for ob in scene.objects:
-                if ob.type == "ARMATURE" and not ob.parent and (not select_object or ob.select):
-                    if armature:
-                        return fail(operator, "Multiple armatures present in scene, make one active to choose which to export")
-                    armature = ob
+    reference_frame = find_reference(scene)
 
-    if armature:
-        print("Note: Using armature '{}'".format(armature.name))
-        node_lookup = {}
-        bone_name_table = {}
-        export_all_bones(node_lookup, bone_name_table,
-            shape, filter(lambda o: not o.parent, armature.data.bones))
-    else:
-        reference_frame = find_reference(scene)
+    if reference_frame is not None:
+        print("Note: Seeking to reference frame at", reference_frame)
+        scene.frame_set(reference_frame)
 
-        if reference_frame is not None:
-            print("Note: Seeking to reference frame at", reference_frame)
-            scene.frame_set(reference_frame)
-
-        # Create a DTS node for every armature/empty in the scene
-        node_lookup = {}
-        export_all_nodes(node_lookup, shape, select_object, filter(lambda o: not o.parent, scene.objects))
+    # Create a DTS node for every empty in the scene
+    node_lookup = {}
+    export_all_nodes(node_lookup, shape, select_object, filter(lambda o: not o.parent, scene.objects))
 
     # NodeOrder backwards compatibility
     if "NodeOrder" in bpy.data.texts:
@@ -190,13 +171,12 @@ def save(operator, context, filepath,
 
     node_lookup = {ob: node_indices.get(node, False) for ob, node in node_lookup.items()}
 
-    if not armature:
-        animated_nodes = []
+    animated_nodes = []
 
-        for node in shape.nodes:
-            data = node.bl_ob.animation_data
-            if data and data.action and len(data.action.fcurves):
-                animated_nodes.append(node.bl_ob)
+    for node in shape.nodes:
+        data = node.bl_ob.animation_data
+        if data and data.action and len(data.action.fcurves):
+            animated_nodes.append(node.bl_ob)
 
     # Now that we have all the nodes, attach our fabled objects to them
     scene_lods = {}
@@ -238,28 +218,13 @@ def save(operator, context, filepath,
         transform_mat = bobj.matrix_local
 
         if bobj.parent:
-            if armature:
-                if bobj.parent != armature:
-                    continue
-                if bobj.parent_type != "BONE":
-                    s = "Mesh '{}' is parented to '{}' using {}-parenting, but only BONE-parenting is supported"
-                    return fail(operator, s.format(bobj.name, armature.name, bobj.parent_type))
-                node = bone_name_table.get(bobj.parent_bone)
-                if not node:
-                    print("Warning: Mesh '{}' has unknown parent_bone '{}', skipping".format(bobj.name, bobj.parent_bone))
-                attach_node = node_indices[node]
-                bone_mat = node.bone.matrix_local
-                # transform_mat = transform_mat * bone_mat.inverted()
-                # Compensate for matrix_local pointing to tail, offset to head
-                transform_mat = Matrix.Translation((0, node.bone.length, 0)) * transform_mat
-            else:
-                if bobj.parent not in node_lookup:
-                    return fail(operator, "The mesh '{}' has a parent of type '{}' (named '{}'). You can only parent meshes to empties, not other meshes.".format(bobj.name, bobj.parent.type, bobj.parent.name))
+            if bobj.parent not in node_lookup:
+                return fail(operator, "The mesh '{}' has a parent of type '{}' (named '{}'). You can only parent meshes to empties, not other meshes.".format(bobj.name, bobj.parent.type, bobj.parent.name))
 
-                if node_lookup[bobj.parent] is False: # not selected
-                    continue
+            if node_lookup[bobj.parent] is False: # not selected
+                continue
 
-                attach_node = node_lookup[bobj.parent]
+            attach_node = node_lookup[bobj.parent]
         else:
             print("Warning: Mesh '{}' has no parent".format(bobj.name))
 
@@ -497,11 +462,7 @@ def save(operator, context, filepath,
         (shape.bounds.min.y + shape.bounds.max.y) / 2,
         (shape.bounds.min.z + shape.bounds.max.z) / 2))
 
-    if armature:
-        sequences = {}
-        sequence_flags = {}
-    else:
-        sequences, sequence_flags = find_seqs(context.scene, select_marker)
+    sequences, sequence_flags = find_seqs(context.scene, select_marker)
 
     for name, markers in sequences.items():
         print("Exporting sequence", name)

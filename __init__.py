@@ -166,12 +166,6 @@ class ExportDTS(bpy.types.Operator, ExportHelper):
         default=True,
         )
 
-    use_armature = BoolProperty(
-        name="Experimental: Skeleton from armature",
-        description="Export bones of an armature into the shape",
-        default=False,
-        )
-
     debug_report = BoolProperty(
         name="Write debug report",
         description="Dump out all the information from the DTS to a file",
