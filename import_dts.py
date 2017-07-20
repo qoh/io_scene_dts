@@ -426,29 +426,40 @@ def load(operator, context, filepath,
 
     # Then put objects in the armatures
     for obj in shape.objects:
+        if obj.node == -1:
+            print('Warning: Object {} is not attached to a node, ignoring'
+                  .format(shape.names[obj.name]))
+            continue
+
         for meshIndex in range(obj.numMeshes):
             mesh = shape.meshes[obj.firstMesh + meshIndex]
+            mtype = mesh.type
 
-            if mesh.type == Mesh.NullType:
+            if mtype == Mesh.NullType:
                 continue
 
-            if mesh.type != Mesh.StandardType:
-                print("{} is a {} mesh, unsupported, but trying".format(
-                    shape.names[obj.name], mesh.type))
-                # continue
+            if mtype != Mesh.StandardType and mtype != Mesh.SkinType:
+                print('Warning: Mesh #{} of object {} is of unsupported type {}, ignoring'.format(
+                    meshIndex + 1, mtype, shape.names[obj.name]))
+                continue
 
             bmesh = create_bmesh(mesh, materials, shape)
             bobj = bpy.data.objects.new(dedup_name(bpy.data.objects, shape.names[obj.name]), bmesh)
             context.scene.objects.link(bobj)
 
-            if obj.node != -1:
-                if use_armature:
-                    bobj.parent = root_ob
-                    bobj.parent_bone = bone_names[obj.node]
-                    bobj.parent_type = "BONE"
-                    bobj.matrix_world = shape.nodes[obj.node].mat
-                else:
-                    bobj.parent = node_obs[obj.node]
+            add_vertex_groups(mesh, bobj, shape)
+
+            if use_armature:
+                bobj.parent = root_ob
+                bobj.parent_bone = bone_names[obj.node]
+                bobj.parent_type = "BONE"
+                bobj.matrix_world = shape.nodes[obj.node].mat
+
+                if mtype == Mesh.SkinType:
+                    modifier = bobj.modifiers.new('Armature', 'ARMATURE')
+                    modifier.object = root_ob
+            else:
+                bobj.parent = node_obs[obj.node]
 
             lod_name = shape.names[lod_by_mesh[meshIndex].name]
 
@@ -475,3 +486,11 @@ def load(operator, context, filepath,
     context.scene.objects.link(ob)
 
     return {"FINISHED"}
+
+def add_vertex_groups(mesh, ob, shape):
+    for node, initial_transform in mesh.bones:
+        # TODO: Handle initial_transform
+        ob.vertex_groups.new(shape.names[shape.nodes[node].name])
+
+    for vertex, bone, weight in mesh.influences:
+        ob.vertex_groups[bone].add((vertex,), weight, 'REPLACE')
