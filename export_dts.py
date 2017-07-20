@@ -77,49 +77,47 @@ def transform_co(ob, co):
 def transform_normal(ob, normal):
     return (ob.matrix_local.to_3x3() * normal).normalized()
 
-def export_all_nodes(lookup, shape, select_object, obs, parent=-1):
-    for ob in obs:
-        if ob.type == "EMPTY":
-            if select_object and not ob.select:
-                lookup[ob] = False
-                continue
+def export_empty_node(lookup, shape, select_object, ob, parent=-1):
+    if select_object and not ob.select:
+        lookup[ob] = False
+        return
 
-            loc, rot, scale = ob.matrix_local.decompose()
+    if "name" in ob:
+        name = ob["name"]
+    else:
+        name = undup_name(ob.name)
 
-            if not seq_float_eq((1, 1, 1), scale):
-                print("Warning: '{}' uses scale, which cannot be exported to DTS nodes".format(ob.name))
+    node = Node(shape.name(name), parent)
 
-            if "name" in ob:
-                name = ob["name"]
-            else:
-                name = undup_name(ob.name)
+    node.armature = None
+    node.bl_ob = ob
+    node.matrix = ob.matrix_local
 
-            node = Node(shape.name(name), parent)
-            node.bl_ob = ob
-            node.translation = loc
-            node.rotation = rot
-            shape.nodes.append(node)
-            lookup[ob] = node
+    shape.nodes.append(node)
+    lookup[ob] = node
 
-            export_all_nodes(lookup, shape, select_object, ob.children, node)
+    for child in ob.children:
+        if child.type == 'EMPTY':
+            export_empty_node(lookup, shape, select_object, child, node)
 
-def export_all_bones(lookup, bone_name_table, shape, bones, parent=-1):
+def export_bones(lookup, shape, armature, bones, parent=-1):
     for bone in bones:
         node = Node(shape.name(bone.name), parent)
         node.bone = bone
         node.bl_ob = bone
 
         mat = bone.matrix_local
+
         if bone.parent:
             mat = bone.parent.matrix_local.inverted() * mat
 
-        node.translation = mat.to_translation()
-        node.rotation = mat.to_quaternion()
+        node.armature = armature
+        node.bl_ob = bone
+        node.matrix = mat
 
         shape.nodes.append(node)
         lookup[bone] = node
-        bone_name_table[bone.name] = node
-        export_all_bones(lookup, bone_name_table, shape, bone.children, node)
+        export_bones(lookup, shape, armature, bone.children, node)
 
 def save(operator, context, filepath,
          select_object=False,
@@ -144,9 +142,18 @@ def save(operator, context, filepath,
         print("Note: Seeking to reference frame at", reference_frame)
         scene.frame_set(reference_frame)
 
-    # Create a DTS node for every empty in the scene
     node_lookup = {}
-    export_all_nodes(node_lookup, shape, select_object, filter(lambda o: not o.parent, scene.objects))
+
+    # Try to create nodes from empties armature bones
+    for ob in scene.objects:
+        if ob.parent is not None:
+            continue
+
+        if ob.type == 'EMPTY':
+            export_empty_node(node_lookup, shape, select_object, ob)
+        elif ob.type == 'ARMATURE' and (ob.select or not select_object):
+            top_bones = filter(lambda b: b.parent is None, ob.data.bones)
+            export_bones(node_lookup, shape, ob, top_bones)
 
     # NodeOrder backwards compatibility
     if "NodeOrder" in bpy.data.texts:
@@ -162,17 +169,18 @@ def save(operator, context, filepath,
 
     for index, node in enumerate(shape.nodes):
         if not isinstance(node.parent, int):
-            node.parent = shape.nodes.index(node.parent)
+            node.parent = node.parent.index
+
         node.index = index
-        shape.default_translations.append(node.translation)
-        shape.default_rotations.append(node.rotation)
 
-    animated_nodes = []
+        location, rotation, scale = node.matrix.decompose()
 
-    for node in shape.nodes:
-        data = node.bl_ob.animation_data
-        if data and data.action and len(data.action.fcurves):
-            animated_nodes.append(node.bl_ob)
+        if not seq_float_eq((1, 1, 1), scale):
+            print("Warning: '{}' uses scale, which cannot be exported to DTS nodes"
+                  .format(shape.names[node.name]))
+
+        shape.default_translations.append(location)
+        shape.default_rotations.append(rotation)
 
     # Now that we have all the nodes, attach our fabled objects to them
     scene_lods = {}
@@ -525,15 +533,19 @@ def save(operator, context, filepath,
         for frame in frame_indices:
             scene.frame_set(frame)
 
-            for ob in animated_nodes:
+            for ob in shape.nodes:
+                if ob.armature is not None:
+                    continue
                 animation_data[frame][ob] = ob.matrix_local.decompose()
 
-        for ob in animated_nodes:
+        for ob in shape.nodes:
+            if ob.armature is not None:
+                continue
+
             index = node_lookup[ob].index
             node = shape.nodes[index]
 
-            base_translation = node.translation
-            base_rotation = node.rotation
+            base_translation, base_rotation, _ = node.matrix.decompose()
             base_scale = Vector((1.0, 1.0, 1.0))
 
             fcurves = ob.animation_data.action.fcurves
@@ -553,7 +565,6 @@ def save(operator, context, filepath,
                 seq.scaleMatters[index] = True
 
             # Write the data where it matters
-            # This assumes that animated_nodes is in the same order as shape.nodes
             for frame in frame_indices:
                 translation, rotation, scale = animation_data[frame][ob]
 
