@@ -653,7 +653,7 @@ def save(operator, context, filepath,
             for ob in shape.nodes:
                 if ob.armature is not None:
                     continue
-                animation_data[frame][ob] = ob.matrix_local.decompose()
+                animation_data[frame][ob] = ob.matrix.decompose()
 
         for ob in shape.nodes:
             if ob.armature is not None:
