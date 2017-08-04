@@ -296,6 +296,8 @@ def save_meshes(scene, shape, node_lookup, select_object):
                 auto_root_index = len(shape.nodes)
 
                 node = Node(shape.name("__auto_root__"))
+                node.bl_ob = None
+                node.armature = None
                 node.index = auto_root_index
                 node.matrix = Matrix.Identity(4)
                 node.matrix_world = node.matrix
@@ -650,22 +652,30 @@ def save(operator, context, filepath,
         for frame in frame_indices:
             scene.frame_set(frame)
 
-            for ob in shape.nodes:
-                #if ob.armature is not None:
-                #    continue
-                animation_data[frame][ob] = ob.matrix.decompose()
+            for node in shape.nodes:
+                if node.armature is not None:
+                    continue
 
-        for ob in shape.nodes:
-            if ob.armature is not None:
+                animation_data[frame][node] = node.matrix.decompose()
+
+        for index, node in enumerate(shape.nodes):
+            if node.armature is not None:
                 continue
 
-            index = node_lookup[ob].index
-            node = shape.nodes[index]
+            ob = node.bl_ob
+
+            if ob is None:
+                continue
+
+            data = ob.animation_data
+
+            if not data or not data.action or not len(data.action.fcurves):
+                continue
 
             base_translation, base_rotation, _ = node.matrix.decompose()
             base_scale = Vector((1.0, 1.0, 1.0))
 
-            fcurves = ob.animation_data.action.fcurves
+            fcurves = data.action.fcurves
 
             curves_rotation = array_from_fcurves_rotation(fcurves, ob)
             curves_translation = array_from_fcurves(fcurves, "location", 3)
@@ -683,7 +693,7 @@ def save(operator, context, filepath,
 
             # Write the data where it matters
             for frame in frame_indices:
-                translation, rotation, scale = animation_data[frame][ob]
+                translation, rotation, scale = animation_data[frame][node]
 
                 if seq.translationMatters[index]:
                     if seq.flags & Sequence.Blend:
