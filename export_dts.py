@@ -651,8 +651,8 @@ def save(operator, context, filepath,
             scene.frame_set(frame)
 
             for ob in shape.nodes:
-                if ob.armature is not None:
-                    continue
+                #if ob.armature is not None:
+                #    continue
                 animation_data[frame][ob] = ob.matrix.decompose()
 
         for ob in shape.nodes:
