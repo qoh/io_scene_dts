@@ -3,6 +3,7 @@ import bpy
 def find_seqs(scene, select_marker):
     sequences = {}
     sequence_flags = {}
+    sequence_names = []
 
     for marker in scene.timeline_markers:
         if ":" not in marker.name or (select_marker and not marker.select):
@@ -39,5 +40,6 @@ def find_seqs(scene, select_marker):
                 flags = ()
 
             sequence_flags[name] = flags
+            sequence_names.append(name)
     
-    return sequences, sequence_flags
+    return sequences, sequence_flags, sequence_names
