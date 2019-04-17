@@ -588,9 +588,7 @@ def save(operator, context, filepath,
     sequences, sequence_flags, sequence_names = find_seqs(context.scene, select_marker)
 
     for name in sequence_names:
-        print("blah")
         markers = sequences[name]
-    #for name, markers in sequences.items():
         print("Exporting sequence", name)
 
         if "start" not in markers:
