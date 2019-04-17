@@ -4,7 +4,6 @@ import bpy
 def find_seqs(scene, select_marker):
     sequences = OrderedDict()
     sequence_flags = {}
-    duplicate_markers = []
 
     if "Sequences" in bpy.data.texts:
         for line in bpy.data.texts["Sequences"].as_string().split("\n"):
