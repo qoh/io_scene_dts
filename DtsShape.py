@@ -210,6 +210,9 @@ class DtsShape(object):
 		self.center = Vector()
 		self.bounds = Box(Vector(), Vector())
 
+		# Plugin state (shouldn't be here)
+		self.auto_root_index = None
+
 	def name(self, string):
 		index = self._names_lookup.get(string.lower())
 
@@ -347,9 +350,9 @@ class DtsShape(object):
 		# Ground transformations
 		assert len(self.ground_translations) == len(self.ground_rotations)
 		for point in self.ground_translations:
-			self.write_vec3(point)
+			stream.write_vec3(point)
 		for quat in self.ground_rotations:
-			self.write_quat(quat)
+			stream.write_quat(quat)
 		stream.guard(10)
 
 		# Object states
@@ -580,9 +583,9 @@ class DtsShape(object):
 
 		if stream.dtsVersion >= 26:
 			for i in range(n_detaillevel):
-				self.alphaIn[i] = stream.read32()
+				self.alpha_in[i] = stream.read32()
 			for i in range(n_detaillevel):
-				self.alphaOut[i] = stream.read32()
+				self.alpha_out[i] = stream.read32()
 
 		# Done with the tribuffer section
 		n_sequence = unpack("i", fd.read(4))[0]

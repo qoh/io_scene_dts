@@ -219,7 +219,7 @@ class Mesh:
                 self.type |= flag
 
         def transformed_verts(self, mat):
-                return map(lambda vert: mat * vert, self.verts)
+                return map(lambda vert: mat @ vert, self.verts)
 
         def calculate_bounds_mat(self, mat):
                 box = Box(

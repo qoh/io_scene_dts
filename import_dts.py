@@ -610,7 +610,7 @@ def load(operator, context, filepath,
 
             lod_name = shape.names[lod_by_mesh[meshIndex].name]
 
-            lod_collection_name = "LOD:" + lod_name
+            lod_collection_name = "LOD " + lod_name
             lod_collection = bpy.data.collections.get(lod_collection_name)
             if lod_collection is None:
                 lod_collection = bpy.data.collections.new(lod_collection_name)
