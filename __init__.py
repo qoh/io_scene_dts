@@ -337,21 +337,19 @@ class HideBlockheadNodes(bpy.types.Operator):
 
 class TorqueMaterialProperties(bpy.types.PropertyGroup):
     blend_mode: EnumProperty(
-        name="Blend mode",
+        name="Blend Mode",
         items=(
+            ("OPAQUE", "Opaque", "No translucency"),
             ("ADDITIVE", "Additive", "White is white, black is transparent"),
             ("SUBTRACTIVE", "Subtractive", "White is black, black is transparent"),
-            ("NONE", "None", "I don't know how to explain this, try it yourself"),
+            ("NONE", "Unknown 1", "Translucent, but neither Additive nor Subtractive"),
         ),
-        default="ADDITIVE")
-    s_wrap: BoolProperty(name="S-Wrap", default=True)
-    t_wrap: BoolProperty(name="T-Wrap", default=True)
+        default="OPAQUE")
     use_ifl: BoolProperty(name="IFL")
-    ifl_name: StringProperty(name="Name")
+    ifl_name: StringProperty(name="IFL Name")
 
-class TorqueMaterialPanel(bpy.types.Panel):
-    bl_idname = "MATERIAL_PT_torque"
-    bl_label = "Torque"
+class MATERIAL_PT_torque_dts(bpy.types.Panel):
+    bl_label = "Torque DTS"
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "material"
@@ -363,19 +361,17 @@ class TorqueMaterialPanel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
+        layout.use_property_split = True # Remove this
+
         obj = context.material
 
-        sublayout = layout.row()
-        sublayout.enabled = obj.use_transparency
-        sublayout.prop(obj.torque_props, "blend_mode", expand=True)
+        layout.prop(obj.torque_props, "blend_mode")
 
         row = layout.row()
         row.prop(obj.torque_props, "use_ifl")
         sublayout = row.column()
         sublayout.enabled = obj.torque_props.use_ifl
         sublayout.prop(obj.torque_props, "ifl_name", text="")
-        sublayout = layout.column()
-        sublayout.enabled = obj.torque_props.use_ifl
 
 def menu_func_import_dts(self, context):
     self.layout.operator(ImportDTS.bl_idname, text="Torque (.dts)")
@@ -397,7 +393,7 @@ classes = (
     SplitMeshIndex,
     HideBlockheadNodes,
     TorqueMaterialProperties,
-    TorqueMaterialPanel,
+    MATERIAL_PT_torque_dts,
 )
 
 def register():

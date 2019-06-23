@@ -155,6 +155,7 @@ def import_material(dmat, filepath):
     if dmat.flags & Material.SWrap and dmat.flags & Material.TWrap:
         texture_extension = "REPEAT" # The default, as well
     elif dmat.flags & Material.SWrap or dmat.flags & Material.TWrap:
+        print("Warning: DTS material '{}' uses single axis texture extension, which is not supported by Blender".format(dmat.name))
         texture_extension = "REPEAT" # Not trivially supported by Blender
     else:
         texture_extension = "EXTEND"
@@ -200,17 +201,16 @@ def import_material(dmat, filepath):
         links.new(node_texture.outputs["Color"], node_principled.inputs["Emission"])
 
     #####
-    if dmat.flags & Material.Additive:
-        mat.torque_props.blend_mode = "ADDITIVE"
-    elif dmat.flags & Material.Subtractive:
-        mat.torque_props.blend_mode = "SUBTRACTIVE"
+    if dmat.flags & Material.Translucent:
+        if dmat.flags & Material.Additive:
+            mat.torque_props.blend_mode = "ADDITIVE"
+        elif dmat.flags & Material.Subtractive:
+            mat.torque_props.blend_mode = "SUBTRACTIVE"
+        else:
+            mat.torque_props.blend_mode = "NONE"
     else:
-        mat.torque_props.blend_mode = "NONE"
+        mat.torque_props.blend_mode = "OPAQUE"
 
-    if dmat.flags & Material.SWrap:
-        mat.torque_props.s_wrap = True
-    if dmat.flags & Material.TWrap:
-        mat.torque_props.t_wraps = True
     if dmat.flags & Material.IFLMaterial:
         mat.torque_props.use_ifl = True
 
