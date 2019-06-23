@@ -30,6 +30,9 @@ def dedup_name(group, name):
         if new_name not in group:
             return new_name
 
+def file_base_name(filepath):
+    return os.path.basename(filepath).rsplit(".", 1)[0]
+
 def import_material(dmat, filepath):
     bmat = bpy.data.materials.new(dedup_name(bpy.data.materials, dmat.name))
 
@@ -225,7 +228,7 @@ class index_pass:
         return item
 
 def create_bmesh(dmesh, materials, shape):
-    me = bpy.data.meshes.new("Mesh")
+    me = bpy.data.meshes.new("")
 
     faces = []
     material_indices = {}
@@ -294,9 +297,6 @@ def create_bmesh(dmesh, materials, shape):
 
     return me
 
-def file_base_name(filepath):
-    return os.path.basename(filepath).rsplit(".", 1)[0]
-
 def insert_reference(frame, shape_nodes):
     for node in shape_nodes:
         ob = node.bl_ob
@@ -323,17 +323,8 @@ def insert_reference(frame, shape_nodes):
             key.interpolation = "LINEAR"
             key.co = (frame, rot[curve.array_index])
 
-def load(operator, context, filepath,
-         reference_keyframe=True,
-         import_sequences=True,
-         use_armature=False,
-         debug_report=False):
+def read_shape(filepath, debug_report):
     shape = DtsShape()
-
-    root_collection = bpy.data.collections.new(file_base_name(filepath))
-    context.scene.collection.children.link(root_collection)
-
-    node_collection = bpy.data.collections.new("Nodes")
 
     with open(filepath, "rb") as fd:
         shape.load(fd)
@@ -343,17 +334,54 @@ def load(operator, context, filepath,
         with open(filepath + ".pass.dts", "wb") as fd:
             shape.save(fd)
 
-    # Create a Blender material for each DTS material
+    return shape
+
+# Create a Blender material for each DTS material
+def import_materials_to_dict(filepath, shape):
     materials = {}
 
     for dmat in shape.materials:
         materials[dmat] = import_material(dmat, filepath)
 
-    # Now assign IFL material properties where needed
+    return materials
+
+def assign_ifl_material_names(shape, material_map):
     for ifl in shape.iflmaterials:
-        mat = materials[shape.materials[ifl.slot]]
+        mat = material_map[shape.materials[ifl.slot]]
         assert mat.torque_props.use_ifl == True
         mat.torque_props.ifl_name = shape.names[ifl.name]
+
+def create_bounds(bounds):
+    me = bpy.data.meshes.new("")
+    me.vertices.add(8)
+    me.vertices[0].co = (bounds.min.x, bounds.min.y, bounds.min.z)
+    me.vertices[1].co = (bounds.max.x, bounds.min.y, bounds.min.z)
+    me.vertices[2].co = (bounds.max.x, bounds.max.y, bounds.min.z)
+    me.vertices[3].co = (bounds.min.x, bounds.max.y, bounds.min.z)
+    me.vertices[4].co = (bounds.min.x, bounds.min.y, bounds.max.z)
+    me.vertices[5].co = (bounds.max.x, bounds.min.y, bounds.max.z)
+    me.vertices[6].co = (bounds.max.x, bounds.max.y, bounds.max.z)
+    me.vertices[7].co = (bounds.min.x, bounds.max.y, bounds.max.z)
+    me.validate()
+    me.update()
+    ob = bpy.data.objects.new("bounds", me)
+    ob.display_type = "BOUNDS"
+    ob.hide_render = True
+    return ob
+
+def load(operator, context, filepath,
+         reference_keyframe=True,
+         import_sequences=True,
+         use_armature=False,
+         debug_report=False):
+    shape = read_shape(filepath, debug_report)
+    materials = import_materials_to_dict(filepath, shape)
+    assign_ifl_material_names(shape, materials)
+
+    root_collection = bpy.data.collections.new(file_base_name(filepath))
+    context.scene.collection.children.link(root_collection)
+
+    node_collection = bpy.data.collections.new("Nodes")
 
     # First load all the nodes into armatures
     lod_by_mesh = {}
@@ -365,25 +393,24 @@ def load(operator, context, filepath,
     node_obs_val = {}
 
     if use_armature:
-        root_arm = bpy.data.armatures.new(file_base_name(filepath))
-        root_ob = bpy.data.objects.new(root_arm.name, root_arm)
-        root_ob.show_x_ray = True
+        root_arm = bpy.data.armatures.new("")
+        root_ob = bpy.data.objects.new(file_base_name(filepath), root_arm)
 
-        context.scene.objects.link(root_ob)
-        context.scene.objects.active = root_ob
+        root_collection.objects.link(root_ob)
 
         # Calculate armature-space matrix, head and tail for each node
         for i, node in enumerate(shape.nodes):
             node.mat = shape.default_rotations[i].to_matrix()
-            node.mat = Matrix.Translation(shape.default_translations[i]) * node.mat.to_4x4()
+            node.mat = Matrix.Translation(shape.default_translations[i]) @ node.mat.to_4x4()
             if node.parent != -1:
-                node.mat = shape.nodes[node.parent].mat * node.mat
+                node.mat = shape.nodes[node.parent].mat @ node.mat
             # node.head = node.mat.to_translation()
             # node.tail = node.head + Vector((0, 0, 0.25))
             # node.tail = node.mat.to_translation()
             # node.head = node.tail - Vector((0, 0, 0.25))
 
-        bpy.ops.object.mode_set(mode="EDIT")
+        context.view_layer.objects.active = root_ob
+        bpy.ops.object.mode_set(mode="EDIT", toggle=False)
 
         edit_bone_table = []
         bone_names = []
@@ -405,15 +432,13 @@ def load(operator, context, filepath,
             edit_bone_table.append(bone)
             bone_names.append(bone.name)
 
-        bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.ops.object.mode_set(mode="OBJECT", toggle=False)
     else:
         if reference_keyframe:
             reference_marker = context.scene.timeline_markers.get("reference")
             if reference_marker is None:
-                reference_frame = 0
-                context.scene.timeline_markers.new("reference", frame=reference_frame)
-            else:
-                reference_frame = reference_marker.frame
+                reference_marker = context.scene.timeline_markers.new("reference", frame=0)
+            reference_frame = reference_marker.frame
         else:
             reference_frame = None
 
@@ -434,7 +459,6 @@ def load(operator, context, filepath,
             if shape.names[node.name] == "__auto_root__" and ob.rotation_quaternion.magnitude == 0:
                 ob.rotation_quaternion = (1, 0, 0, 0)
 
-            #context.scene.objects.link(ob)
             node_collection.objects.link(ob)
             node_obs.append(ob)
             node_obs_val[node] = ob
@@ -608,22 +632,7 @@ def load(operator, context, filepath,
             else:
                 bobj.parent = node_obs[obj.node]
 
-    # Import a bounds mesh
-    me = bpy.data.meshes.new("Mesh")
-    me.vertices.add(8)
-    me.vertices[0].co = (shape.bounds.min.x, shape.bounds.min.y, shape.bounds.min.z)
-    me.vertices[1].co = (shape.bounds.max.x, shape.bounds.min.y, shape.bounds.min.z)
-    me.vertices[2].co = (shape.bounds.max.x, shape.bounds.max.y, shape.bounds.min.z)
-    me.vertices[3].co = (shape.bounds.min.x, shape.bounds.max.y, shape.bounds.min.z)
-    me.vertices[4].co = (shape.bounds.min.x, shape.bounds.min.y, shape.bounds.max.z)
-    me.vertices[5].co = (shape.bounds.max.x, shape.bounds.min.y, shape.bounds.max.z)
-    me.vertices[6].co = (shape.bounds.max.x, shape.bounds.max.y, shape.bounds.max.z)
-    me.vertices[7].co = (shape.bounds.min.x, shape.bounds.max.y, shape.bounds.max.z)
-    me.validate()
-    me.update()
-    ob = bpy.data.objects.new("bounds", me)
-    ob.display_type = "BOUNDS"
-    root_collection.objects.link(ob)
+    root_collection.objects.link(create_bounds(shape.bounds))
 
     return {"FINISHED"}
 
