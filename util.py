@@ -6,7 +6,7 @@ from fractions import Fraction
 
 texture_extensions = ("png", "jpg")
 
-default_materials = {
+default_materials_src = {
     "black": (0, 0, 0),
     "black25": (191, 191, 191),
     "black50": (128, 128, 128),
@@ -26,11 +26,10 @@ default_materials = {
     "yellow": (255, 255, 0)
 }
 
-for name, color in default_materials.items():
-    default_materials[name] = (color[0] / 255, color[1] / 255, color[2] / 255)
+default_materials = {}
 
-for key, value in tuple(default_materials.items()):
-    default_materials[key.lower()] = value
+for name, color in default_materials_src.items():
+    default_materials[name.lower()] = (color[0] / 255, color[1] / 255, color[2] / 255, 1.0)
 
 def resolve_texture(filepath, name):
     dirname = os.path.dirname(filepath)
@@ -95,7 +94,7 @@ def ob_curves_array(ob, data_path, array_count):
 
   for index, curve in enumerate(curves):
     if curve is None:
-      curves[index] = action.fcurves.new(data_path, index)
+      curves[index] = action.fcurves.new(data_path, index=index)
 
   return curves
 

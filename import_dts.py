@@ -1,6 +1,7 @@
 import bpy
 import os
 from bpy_extras.io_utils import unpack_list
+from bpy_extras import node_shader_utils
 
 from .DtsShape import DtsShape
 from .DtsTypes import *
@@ -29,46 +30,69 @@ def dedup_name(group, name):
         if new_name not in group:
             return new_name
 
-def import_material(color_source, dmat, filepath):
+def import_material(dmat, filepath):
     bmat = bpy.data.materials.new(dedup_name(bpy.data.materials, dmat.name))
-    bmat.diffuse_intensity = 1
+
+    wrap = node_shader_utils.PrincipledBSDFWrapper(bmat, is_readonly=False)
+
+    #bmat.diffuse_intensity = 1
 
     texname = resolve_texture(filepath, dmat.name)
+    teximg = None
+
+    if dmat.flags & Material.SWrap and dmat.flags & Material.TWrap:
+        texture_extension = "REPEAT" # The default, as well
+    elif dmat.flags & Material.SWrap or dmat.flags & Material.TWrap:
+        texture_extension = "REPEAT" # Not trivially supported by Blender
+    else:
+        texture_extension = "EXTEND"
 
     if texname is not None:
         try:
             teximg = bpy.data.images.load(texname)
         except:
             print("Cannot load image", texname)
+            teximg = None
 
-        texslot = bmat.texture_slots.add()
-        texslot.use_map_alpha = True
-        tex = texslot.texture = bpy.data.textures.new(dmat.name, "IMAGE")
-        tex.image = teximg
+        wrap.base_color_texture.image = teximg
+        wrap.base_color_texture.texcoords = "UV"
+        wrap.base_color_texture.extension = texture_extension
 
         # Try to figure out a diffuse color for solid shading
         if teximg.size[0] <= 16 and teximg.size[1] <= 16:
-            if teximg.use_alpha:
-                pixels = grouper(teximg.pixels, 4)
-            else:
-                pixels = grouper(teximg.pixels, 3)
-
+            pixels = grouper(teximg.pixels, teximg.channels)
             color = pixels.__next__()
 
             for other in pixels:
                 if other != color:
                     break
             else:
-                bmat.diffuse_color = color[:3]
+                if teximg.channels == 3 or teximg.channels == 4:
+                    bmat.diffuse_color = (color[0], color[1], color[2], 1.0)
     elif dmat.name.lower() in default_materials:
-        bmat.diffuse_color = default_materials[dmat.name.lower()]
-    else: # give it a random color
-        bmat.diffuse_color = color_source.__next__()
+        wrap.base_color = default_materials[dmat.name.lower()]
+        pass
 
     if dmat.flags & Material.SelfIlluminating:
-        bmat.use_shadeless = True
+        #bmat.use_shadeless = True
+        print("NYI: SelfIlluminating with nodes")
+        pass
     if dmat.flags & Material.Translucent:
-        bmat.use_transparency = True
+        #bmat.use_transparency = True
+
+        if teximg is not None and teximg.channels == 4:
+            wrap.alpha_texture.image = teximg
+            wrap.alpha_texture.texcoords = "UV"
+        else:
+            wrap.alpha = 1.0 # ?
+
+        # EEVEE only
+        if dmat.flags & Material.Additive:
+            bmat.blend_method = "ADDITIVE"
+        elif dmat.flags & Material.Subtractive:
+            bmat.blend_method = "BLEND" # TODO: This isn't the same as Subtractive
+        else:
+            bmat.blend_method = "HASHED" # TODO: Placeholder, this has nothing to do with NONE
 
     if dmat.flags & Material.Additive:
         bmat.torque_props.blend_mode = "ADDITIVE"
@@ -88,6 +112,113 @@ def import_material(color_source, dmat, filepath):
     # AuxilaryMask?
 
     return bmat
+
+#class Material:
+#        SWrap            = 0x00000001 - check
+#        TWrap            = 0x00000002 - check
+#        Translucent      = 0x00000004 - check
+#        Additive         = 0x00000008 - check?
+#        Subtractive      = 0x00000010 - check?
+#        SelfIlluminating = 0x00000020 - check
+#        NeverEnvMap      = 0x00000040
+#        NoMipMap         = 0x00000080
+#        MipMapZeroBorder = 0x00000100
+#        IFLMaterial      = 0x08000000
+#        IFLFrame         = 0x10000000
+#        DetailMap        = 0x20000000
+#        BumpMap          = 0x40000000
+#        ReflectanceMap   = 0x80000000
+#        AuxiliaryMask    = 0xE0000000
+def import_material(dmat, filepath):
+    mat = bpy.data.materials.new(dedup_name(bpy.data.materials, dmat.name))
+    mat.use_nodes = True
+
+    node_tree = mat.node_tree
+    nodes = node_tree.nodes
+    links = node_tree.links
+
+    node_out = nodes["Material Output"]
+    node_principled = nodes["Principled BSDF"]
+
+    image = None
+    image_path = resolve_texture(filepath, dmat.name)
+
+    if image_path is not None:
+        try:
+            image = bpy.data.images.load(image_path)
+        except:
+            print("Failed to load image", image_path)
+
+    #if image is None:
+    #    raise NotImplementedError("No image found for material {}".format(dmat.name))
+
+    if dmat.flags & Material.SWrap and dmat.flags & Material.TWrap:
+        texture_extension = "REPEAT" # The default, as well
+    elif dmat.flags & Material.SWrap or dmat.flags & Material.TWrap:
+        texture_extension = "REPEAT" # Not trivially supported by Blender
+    else:
+        texture_extension = "EXTEND"
+
+    node_texture = nodes.new("ShaderNodeTexImage")
+    node_texture.image = image
+    node_texture.extension = texture_extension
+    node_texture.location = (-600, 300)
+    node_mix_texture = nodes.new("ShaderNodeMixRGB")
+    node_mix_texture.location = (-200, 300)
+    links.new(node_mix_texture.outputs["Color"], node_principled.inputs["Base Color"])
+    links.new(node_texture.outputs["Color"], node_mix_texture.inputs["Color2"])
+    links.new(node_texture.outputs["Alpha"], node_mix_texture.inputs["Fac"])
+
+    if dmat.flags & Material.Translucent:
+        # EEVEE only
+        mat.blend_method = "BLEND"
+
+        # TODO: Get this to work consistently with Blockland
+        if dmat.flags & Material.Additive and dmat.flags & Material.Subtractive:
+            # Additive+Subtractive = ???
+            print("NYI: Nodes for translucency Additive+Subtractive")
+            node_principled.inputs["Alpha"].default_value = 0.5 # Placeholder
+        elif dmat.flags & Material.Additive:#or not (dmat.flags & (Material.Additive | Material.Subtractive)):
+            node_rgb_to_bw = nodes.new("ShaderNodeRGBToBW")
+            links.new(node_texture.outputs["Color"], node_rgb_to_bw.inputs["Color"])
+            links.new(node_rgb_to_bw.outputs["Val"], node_principled.inputs["Alpha"])
+        elif dmat.flags & Material.Subtractive:
+            node_rgb_to_bw = nodes.new("ShaderNodeRGBToBW")
+            node_math = nodes.new("ShaderNodeMath")
+            node_math.operation = "SUBTRACT"
+            node_math.inputs[0].default_value = 1.0
+            links.new(node_texture.outputs["Color"], node_rgb_to_bw.inputs["Color"])
+            links.new(node_rgb_to_bw.outputs["Val"], node_math.inputs[1])
+            links.new(node_math.outputs["Value"], node_principled.inputs["Alpha"])
+        else:
+            # None = ???
+            print("NYI: Nodes for translucency None")
+            #node_principled.inputs["Alpha"].default_value = 0.5 # Placeholder
+            links.new(node_texture.outputs["Alpha"], node_principled.inputs["Alpha"])
+
+    if dmat.flags & Material.SelfIlluminating:
+        links.new(node_texture.outputs["Color"], node_principled.inputs["Emission"])
+
+    #####
+    if dmat.flags & Material.Additive:
+        mat.torque_props.blend_mode = "ADDITIVE"
+    elif dmat.flags & Material.Subtractive:
+        mat.torque_props.blend_mode = "SUBTRACTIVE"
+    else:
+        mat.torque_props.blend_mode = "NONE"
+
+    if dmat.flags & Material.SWrap:
+        mat.torque_props.s_wrap = True
+    if dmat.flags & Material.TWrap:
+        mat.torque_props.t_wraps = True
+    if dmat.flags & Material.IFLMaterial:
+        mat.torque_props.use_ifl = True
+
+    # TODO: MipMapZeroBorder, IFLFrame, DetailMap, BumpMap, ReflectanceMap
+    # AuxilaryMask?
+    #####
+
+    return mat
 
 class index_pass:
     def __getitem__(self, item):
@@ -143,8 +274,7 @@ def create_bmesh(dmesh, materials, shape):
     me.polygons.add(len(faces))
     me.loops.add(len(faces) * 3)
 
-    me.uv_textures.new()
-    uvs = me.uv_layers[0]
+    uvs = me.uv_layers.new()
 
     for i, ((verts, dmat), poly) in enumerate(zip(faces, me.polygons)):
         poly.use_smooth = True # DTS geometry is always smooth shaded
@@ -200,6 +330,11 @@ def load(operator, context, filepath,
          debug_report=False):
     shape = DtsShape()
 
+    root_collection = bpy.data.collections.new(file_base_name(filepath))
+    context.scene.collection.children.link(root_collection)
+
+    node_collection = bpy.data.collections.new("Nodes")
+
     with open(filepath, "rb") as fd:
         shape.load(fd)
 
@@ -210,10 +345,9 @@ def load(operator, context, filepath,
 
     # Create a Blender material for each DTS material
     materials = {}
-    color_source = get_rgb_colors()
 
     for dmat in shape.materials:
-        materials[dmat] = import_material(color_source, dmat, filepath)
+        materials[dmat] = import_material(dmat, filepath)
 
     # Now assign IFL material properties where needed
     for ifl in shape.iflmaterials:
@@ -277,7 +411,7 @@ def load(operator, context, filepath,
             reference_marker = context.scene.timeline_markers.get("reference")
             if reference_marker is None:
                 reference_frame = 0
-                context.scene.timeline_markers.new("reference", reference_frame)
+                context.scene.timeline_markers.new("reference", frame=reference_frame)
             else:
                 reference_frame = reference_marker.frame
         else:
@@ -288,8 +422,8 @@ def load(operator, context, filepath,
             ob = bpy.data.objects.new(dedup_name(bpy.data.objects, shape.names[node.name]), None)
             node.bl_ob = ob
             ob["nodeIndex"] = i
-            ob.empty_draw_type = "SINGLE_ARROW"
-            ob.empty_draw_size = 0.5
+            ob.empty_display_type = "SINGLE_ARROW"
+            ob.empty_display_size = 0.5
 
             if node.parent != -1:
                 ob.parent = node_obs[node.parent]
@@ -300,12 +434,16 @@ def load(operator, context, filepath,
             if shape.names[node.name] == "__auto_root__" and ob.rotation_quaternion.magnitude == 0:
                 ob.rotation_quaternion = (1, 0, 0, 0)
 
-            context.scene.objects.link(ob)
+            #context.scene.objects.link(ob)
+            node_collection.objects.link(ob)
             node_obs.append(ob)
             node_obs_val[node] = ob
 
         if reference_keyframe:
             insert_reference(reference_frame, shape.nodes)
+
+    if node_collection.objects:
+        root_collection.children.link(node_collection)
 
     # Try animation?
     if import_sequences:
@@ -413,8 +551,8 @@ def load(operator, context, filepath,
             # Insert a reference frame immediately before the animation
             # insert_reference(globalToolIndex - 2, shape.nodes)
 
-            context.scene.timeline_markers.new(name + ":start", globalToolIndex)
-            context.scene.timeline_markers.new(name + ":end", globalToolIndex + seq.numKeyframes * step - 1)
+            context.scene.timeline_markers.new(name + ":start", frame=globalToolIndex)
+            context.scene.timeline_markers.new(name + ":end", frame=globalToolIndex + seq.numKeyframes * step - 1)
             globalToolIndex += seq.numKeyframes * step + 30
 
         if "Sequences" in bpy.data.texts:
@@ -445,7 +583,16 @@ def load(operator, context, filepath,
 
             bmesh = create_bmesh(mesh, materials, shape)
             bobj = bpy.data.objects.new(dedup_name(bpy.data.objects, shape.names[obj.name]), bmesh)
-            context.scene.objects.link(bobj)
+
+            lod_name = shape.names[lod_by_mesh[meshIndex].name]
+
+            lod_collection_name = "LOD:" + lod_name
+            lod_collection = bpy.data.collections.get(lod_collection_name)
+            if lod_collection is None:
+                lod_collection = bpy.data.collections.new(lod_collection_name)
+                root_collection.children.link(lod_collection)
+
+            lod_collection.objects.link(bobj)
 
             add_vertex_groups(mesh, bobj, shape)
 
@@ -461,13 +608,6 @@ def load(operator, context, filepath,
             else:
                 bobj.parent = node_obs[obj.node]
 
-            lod_name = shape.names[lod_by_mesh[meshIndex].name]
-
-            if lod_name not in bpy.data.groups:
-                bpy.data.groups.new(lod_name)
-
-            bpy.data.groups[lod_name].objects.link(bobj)
-
     # Import a bounds mesh
     me = bpy.data.meshes.new("Mesh")
     me.vertices.add(8)
@@ -482,8 +622,8 @@ def load(operator, context, filepath,
     me.validate()
     me.update()
     ob = bpy.data.objects.new("bounds", me)
-    ob.draw_type = "BOUNDS"
-    context.scene.objects.link(ob)
+    ob.display_type = "BOUNDS"
+    root_collection.objects.link(ob)
 
     return {"FINISHED"}
 
