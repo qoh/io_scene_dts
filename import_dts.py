@@ -167,6 +167,7 @@ def import_material(dmat, filepath):
 
     if dmat.flags & Material.SelfIlluminating:
         links.new(color_socket, node_principled.inputs["Emission"])
+        node_principled.inputs["Base Color"].default_value = (0, 0, 0, 1)
     else:
         links.new(color_socket, node_principled.inputs["Base Color"])
 
