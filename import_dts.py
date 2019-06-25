@@ -38,8 +38,6 @@ def import_material(dmat, filepath):
 
     wrap = node_shader_utils.PrincipledBSDFWrapper(bmat, is_readonly=False)
 
-    #bmat.diffuse_intensity = 1
-
     texname = resolve_texture(filepath, dmat.name)
     teximg = None
 
@@ -76,43 +74,10 @@ def import_material(dmat, filepath):
         wrap.base_color = default_materials[dmat.name.lower()]
         pass
 
-    if dmat.flags & Material.SelfIlluminating:
-        #bmat.use_shadeless = True
-        print("NYI: SelfIlluminating with nodes")
-        pass
     if dmat.flags & Material.Translucent:
-        #bmat.use_transparency = True
-
         if teximg is not None and teximg.channels == 4:
             wrap.alpha_texture.image = teximg
             wrap.alpha_texture.texcoords = "UV"
-        else:
-            wrap.alpha = 1.0 # ?
-
-        # EEVEE only
-        if dmat.flags & Material.Additive:
-            bmat.blend_method = "ADDITIVE"
-        elif dmat.flags & Material.Subtractive:
-            bmat.blend_method = "BLEND" # TODO: This isn't the same as Subtractive
-        else:
-            bmat.blend_method = "HASHED" # TODO: Placeholder, this has nothing to do with NONE
-
-    if dmat.flags & Material.Additive:
-        bmat.torque_props.blend_mode = "ADDITIVE"
-    elif dmat.flags & Material.Subtractive:
-        bmat.torque_props.blend_mode = "SUBTRACTIVE"
-    else:
-        bmat.torque_props.blend_mode = "NONE"
-
-    if dmat.flags & Material.SWrap:
-        bmat.torque_props.s_wrap = True
-    if dmat.flags & Material.TWrap:
-        bmat.torque_props.t_wraps = True
-    if dmat.flags & Material.IFLMaterial:
-        bmat.torque_props.use_ifl = True
-
-    # TODO: MipMapZeroBorder, IFLFrame, DetailMap, BumpMap, ReflectanceMap
-    # AuxilaryMask?
 
     return bmat
 
@@ -152,9 +117,6 @@ def import_material(dmat, filepath):
         except:
             print("Failed to load image", image_path)
 
-    #if image is None:
-    #    raise NotImplementedError("No image found for material {}".format(dmat.name))
-
     if dmat.flags & Material.SWrap and dmat.flags & Material.TWrap:
         texture_extension = "REPEAT" # The default, as well
     elif dmat.flags & Material.SWrap or dmat.flags & Material.TWrap:
@@ -164,56 +126,51 @@ def import_material(dmat, filepath):
         texture_extension = "EXTEND"
 
     node_texture = nodes.new("ShaderNodeTexImage")
+    node_texture.label = "Source Texture"
     node_texture.image = image
     node_texture.extension = texture_extension
     node_texture.location = (-600, 300)
     node_mix_texture = nodes.new("ShaderNodeMixRGB")
+    node_mix_texture.label = "Colorshift"
     node_mix_texture.location = (-200, 300)
-    links.new(node_mix_texture.outputs["Color"], node_principled.inputs["Base Color"])
+    node_mix_texture.inputs["Color1"].default_value = (1, 1, 1, 1)
     links.new(node_texture.outputs["Color"], node_mix_texture.inputs["Color2"])
     links.new(node_texture.outputs["Alpha"], node_mix_texture.inputs["Fac"])
+    color_socket = node_mix_texture.outputs["Color"]
 
     if dmat.flags & Material.Translucent:
-        # EEVEE only
-        mat.blend_method = "BLEND"
-
-        # TODO: Get this to work consistently with Blockland
-        if dmat.flags & Material.Additive and dmat.flags & Material.Subtractive:
-            # Additive+Subtractive = ???
-            print("NYI: Nodes for translucency Additive+Subtractive")
-            node_principled.inputs["Alpha"].default_value = 0.5 # Placeholder
-        elif dmat.flags & Material.Additive:#or not (dmat.flags & (Material.Additive | Material.Subtractive)):
+        if dmat.flags & Material.Additive:
+            mat.torque_props.blend_mode = "ADDITIVE"
+            mat.blend_method = "ADDITIVE"
             node_rgb_to_bw = nodes.new("ShaderNodeRGBToBW")
             links.new(node_texture.outputs["Color"], node_rgb_to_bw.inputs["Color"])
-            links.new(node_rgb_to_bw.outputs["Val"], node_principled.inputs["Alpha"])
+            alpha_output = node_rgb_to_bw.outputs["Val"]
         elif dmat.flags & Material.Subtractive:
+            mat.torque_props.blend_mode = "SUBTRACTIVE"
+            mat.blend_method = "ADDITIVE" # TODO: Figure out how to do subtractive in Blender
             node_rgb_to_bw = nodes.new("ShaderNodeRGBToBW")
             node_math = nodes.new("ShaderNodeMath")
             node_math.operation = "SUBTRACT"
             node_math.inputs[0].default_value = 1.0
             links.new(node_texture.outputs["Color"], node_rgb_to_bw.inputs["Color"])
             links.new(node_rgb_to_bw.outputs["Val"], node_math.inputs[1])
-            links.new(node_math.outputs["Value"], node_principled.inputs["Alpha"])
+            alpha_output = node_math.outputs["Value"]
         else:
-            # None = ???
-            print("NYI: Nodes for translucency None")
-            #node_principled.inputs["Alpha"].default_value = 0.5 # Placeholder
-            links.new(node_texture.outputs["Alpha"], node_principled.inputs["Alpha"])
+            mat.torque_props.blend_mode = "TRANSLUCENT"
+            mat.blend_method = "BLEND"
+            alpha_output = node_texture.outputs["Alpha"]
 
-    if dmat.flags & Material.SelfIlluminating:
-        links.new(node_texture.outputs["Color"], node_principled.inputs["Emission"])
-
-    #####
-    if dmat.flags & Material.Translucent:
-        if dmat.flags & Material.Additive:
-            mat.torque_props.blend_mode = "ADDITIVE"
-        elif dmat.flags & Material.Subtractive:
-            mat.torque_props.blend_mode = "SUBTRACTIVE"
-        else:
-            mat.torque_props.blend_mode = "NONE"
+        mat.shadow_method = "NONE"
+        links.new(alpha_output, node_principled.inputs["Alpha"])
     else:
         mat.torque_props.blend_mode = "OPAQUE"
 
+    if dmat.flags & Material.SelfIlluminating:
+        links.new(color_socket, node_principled.inputs["Emission"])
+    else:
+        links.new(color_socket, node_principled.inputs["Base Color"])
+
+    #####
     if dmat.flags & Material.IFLMaterial:
         mat.torque_props.use_ifl = True
 
@@ -234,6 +191,7 @@ def create_bmesh(dmesh, materials, shape):
     material_indices = {}
 
     indices_pass = index_pass()
+    print(f"Imported mesh #primitives={len(dmesh.primitives)} #indices={len(dmesh.indices)} #verts={len(dmesh.verts)}")
 
     for prim in dmesh.primitives:
         if prim.type & Primitive.Indexed:
@@ -242,6 +200,7 @@ def create_bmesh(dmesh, materials, shape):
             indices = indices_pass
 
         dmat = None
+        print(f"Imported mesh primitive firstElement={prim.firstElement} numElements={prim.numElements}")
 
         if not (prim.type & Primitive.NoMaterial):
             dmat = shape.materials[prim.type & Primitive.MaterialMask]

@@ -526,6 +526,11 @@ def save(operator, context, filepath,
 
                         for vert_index, loop_index in zip(reversed(poly.vertices), reversed(poly.loop_indices)):
                             vertex_index = len(dmesh.verts)
+
+                            if vertex_index == 2 ** 15 - 1:
+                                print(f"Mesh {bobj.name} has too many vertices (> {vertex_index})")
+                                break
+
                             dmesh.indices.append(len(dmesh.indices))
 
                             vert = mesh.vertices[vert_index]
@@ -545,16 +550,22 @@ def save(operator, context, filepath,
                                 dmesh.tverts.append(Vector((uv.x, 1 - uv.y)))
                             else:
                                 dmesh.tverts.append(Vector((0, 0)))
+                        else:
+                            continue
+                        break
 
+                    print(len(dmesh.verts))
                     numElements = len(dmesh.verts) - firstElement
+                    print(f"Debug: Primitive has firstElement={firstElement} numElements={numElements}")
                     dmesh.primitives.append(Primitive(firstElement, numElements, flags))
 
                 # bobj.to_mesh_clear() or bobj.original.to_mesh_clear()?
+                print(f"Mesh {bobj.name} with {len(mesh.polygons)} polygons exported to mesh with {len(dmesh.primitives)} primitives, {len(dmesh.indices)} indices, {len(dmesh.verts)} verts")
 
                 dmesh.vertsPerFrame = len(dmesh.verts)
 
                 if len(dmesh.indices) >= 65536:
-                    return fail(operator, "The mesh '{}' has too many vertex indices ({} >= 65536)".format(bobj.name, len(dmesh.indices)))
+                    return fail(operator, f"The mesh {bobj.name} has too many vertex indices ({len(dmesh.indices)} >= 65536)")
             else:
                 # print("Adding Null mesh for object {} in LOD {}".format(shape.names[object.name], lod_name))
                 shape.meshes.append(Mesh(Mesh.NullType))

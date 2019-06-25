@@ -339,10 +339,10 @@ class TorqueMaterialProperties(bpy.types.PropertyGroup):
     blend_mode: EnumProperty(
         name="Blend Mode",
         items=(
-            ("OPAQUE", "Opaque", "No translucency"),
+            ("OPAQUE", "Opaque", "Display without transparency"),
+            ("TRANSLUCENT", "Translucent", "Display with alpha blending"),
             ("ADDITIVE", "Additive", "White is white, black is transparent"),
             ("SUBTRACTIVE", "Subtractive", "White is black, black is transparent"),
-            ("NONE", "Unknown 1", "Translucent, but neither Additive nor Subtractive"),
         ),
         default="OPAQUE")
     use_ifl: BoolProperty(name="IFL")
