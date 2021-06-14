@@ -154,6 +154,12 @@ class ExportDTS(bpy.types.Operator, ExportHelper):
             ("all-always", "All (always)", "Generate textures for all materials"))
         )
 
+    raw_colors = BoolProperty(
+        name="Use raw material colors",
+        description="Use raw rgb material colors when generating textures",
+        default=False,
+        )
+
     apply_modifiers = BoolProperty(
         name="Apply modifiers",
         description="Apply modifiers to meshes",
