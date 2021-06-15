@@ -157,6 +157,12 @@ class ExportDTS(bpy.types.Operator, ExportHelper):
     raw_colors = BoolProperty(
         name="Use raw material colors",
         description="Use raw rgb material colors when generating textures",
+        default = False,
+        )
+
+    dsq_compat = BoolProperty(
+        name="Export with DSQ compatibility",
+        description="Use to ensure imported and reexported models work with previously existing DSQ's. Do not enable if you are not reexporting an imported model.",
         default=False,
         )
 

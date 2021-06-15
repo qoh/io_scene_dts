@@ -156,7 +156,7 @@ def export_bones(lookup, shape, armature, bones, parent=-1):
         lookup[bone] = node
         export_bones(lookup, shape, armature, bone.children, node)
 
-def save_nodes(scene, shape, select_object):
+def save_nodes(scene, shape, select_object, dsq_compat):
     node_lookup = {}
 
     # Try to create nodes from empties armature bones
@@ -179,11 +179,15 @@ def save_nodes(scene, shape, select_object):
         order_key = {}
 
     # Sort by node indices from the DTS
-    shape.nodes.sort(key=lambda n:
-        order_key.get(shape.names[n.name], n.bl_ob.get("nodeIndex", sys.maxsize)))
+    if dsq_compat:
+        shape.nodes.sort(key=lambda n:
+            order_key.get(shape.names[n.name], n.bl_ob.get("nodeIndex", sys.maxsize)))
 
     for index, node in enumerate(shape.nodes):
         if not isinstance(node.parent, int):
+            if not hasattr(node.parent, "index") and dsq_compat:
+                node_lookup = {"fail": "DSQ compatibility export failed due to new node structure."}
+                break
             node.parent = node.parent.index
 
         location, rotation, scale = node.matrix.decompose()
@@ -396,6 +400,7 @@ def save(operator, context, filepath,
          blank_material=True,
          generate_texture="disabled",
          raw_colors = False,
+         dsq_compat = False,
          apply_modifiers=True,
          debug_report=False):
     print("Exporting scene to DTS")
@@ -412,7 +417,9 @@ def save(operator, context, filepath,
         print("Note: Seeking to reference frame at", reference_frame)
         scene.frame_set(reference_frame)
 
-    node_lookup = save_nodes(scene, shape, select_object)
+    node_lookup = save_nodes(scene, shape, select_object, dsq_compat)
+    if "fail" in node_lookup:
+        return fail(operator, node_lookup["fail"])
     scene_lods, scene_objects, bounds_ob = save_meshes(
         scene, shape, node_lookup, select_object)
 
