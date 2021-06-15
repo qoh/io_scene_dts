@@ -395,6 +395,7 @@ def save(operator, context, filepath,
          select_marker=False,
          blank_material=True,
          generate_texture="disabled",
+         raw_colors = False,
          apply_modifiers=True,
          debug_report=False):
     print("Exporting scene to DTS")
@@ -717,11 +718,11 @@ def save(operator, context, filepath,
     with open(filepath, "wb") as fd:
         shape.save(fd)
 
-    write_material_textures(generate_texture, filepath, shape)
+    write_material_textures(generate_texture, filepath, shape, raw_colors)
 
     return {"FINISHED"}
 
-def write_material_textures(mode, filepath, shape):
+def write_material_textures(mode, filepath, shape, raw_colors):
     if mode == 'disabled':
         return
 
@@ -739,10 +740,12 @@ def write_material_textures(mode, filepath, shape):
             continue
 
         bl_mat = material.bl_mat
-        color = bl_mat.diffuse_color * bl_mat.diffuse_intensity
-        color.r = linearrgb_to_srgb(color.r)
-        color.g = linearrgb_to_srgb(color.g)
-        color.b = linearrgb_to_srgb(color.b)
+        color = bl_mat.diffuse_color
+        if not raw_colors:
+            color = color * bl_mat.diffuse_intensity
+            color.r = linearrgb_to_srgb(color.r)
+            color.g = linearrgb_to_srgb(color.g)
+            color.b = linearrgb_to_srgb(color.b)
 
         image = bpy.data.images.new(material.name.lower() + "_generated", 16, 16)
         image.pixels = (color.r, color.g, color.b, 1.0) * 256
