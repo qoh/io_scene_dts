@@ -384,6 +384,14 @@ class TorqueMaterialPanel(bpy.types.Panel):
         sublayout.prop(obj.torque_props, "ifl_name", text="")
         sublayout = layout.column()
         sublayout.enabled = obj.torque_props.use_ifl
+        
+        row = layout.row()
+        sublayout = row.column()
+        sublayout.enabled = obj.torque_props.s_wrap
+        sublayout.prop(obj.torque_props, "s_wrap")
+        sublayout = row.column()
+        sublayout.enabled = obj.torque_props.t_wrap
+        sublayout.prop(obj.torque_props, "t_wrap")
 
 def menu_func_import_dts(self, context):
     self.layout.operator(ImportDTS.bl_idname, text="Torque (.dts)")
