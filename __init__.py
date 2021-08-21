@@ -354,6 +354,8 @@ class TorqueMaterialProperties(bpy.types.PropertyGroup):
         default="ADDITIVE")
     s_wrap = BoolProperty(name="S-Wrap", default=True)
     t_wrap = BoolProperty(name="T-Wrap", default=True)
+    no_mipmaps = BoolProperty(name="No Mipmaps", default=True)
+    mip_bzero  = BoolProperty(name="Mipmap Zero Border", default=False)
     use_ifl = BoolProperty(name="IFL")
     ifl_name = StringProperty(name="Name")
 
@@ -390,6 +392,13 @@ class TorqueMaterialPanel(bpy.types.Panel):
         sublayout.prop(obj.torque_props, "s_wrap")
         sublayout = row.column()
         sublayout.prop(obj.torque_props, "t_wrap")
+
+        row = layout.row()
+        sublayout = row.column()
+        sublayout.prop(obj.torque_props, "no_mipmaps")
+        sublayout = row.column()
+        sublayout.enabled = not obj.torque_props.no_mipmaps
+        sublayout.prop(obj.torque_props, "mip_bzero")
 
 def menu_func_import_dts(self, context):
     self.layout.operator(ImportDTS.bl_idname, text="Torque (.dts)")
