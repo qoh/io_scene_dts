@@ -90,7 +90,10 @@ def export_material(mat, shape):
     if mat.torque_props.t_wrap:
         flags |= Material.TWrap
     flags |= Material.NeverEnvMap
-    flags |= Material.NoMipMap
+    if mat.torque_props.no_mipmaps:
+        flags |= Material.NoMipMap
+    if mat.torque_props.mip_bzero:
+        flags |= Material.MipMapZeroBorder
 
     if mat.torque_props.use_ifl:
         flags |= Material.IFLMaterial
